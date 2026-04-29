@@ -1,231 +1,136 @@
 // src/pages/Puestos.jsx
 import { useState, useEffect } from 'react';
-import { getPosts, getEmployees, addPost, updatePost } from '../data/store';
+import { getPosts, savePost, deletePost } from '../data/store';
 
-const EMPTY_FORM = {
-  name: '', location: '', shifts: ['7:00-15:00'], requiredGuards: 1,
+const BLANK = { name:'', location:'', address:'', shifts:['8:00AM/4:00PM'], armed:false, notes:'' };
+const S = {
+  page: { color:'#fff' },
+  header: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
+  title: { fontSize:'1.6rem', fontWeight:800, color:'#F5C518', margin:0 },
+  btn: { background:'#F5C518', color:'#000', border:'none', borderRadius:8, padding:'10px 20px', fontWeight:700, cursor:'pointer', fontSize:14 },
+  btnRed: { background:'rgba(220,38,38,0.15)', color:'#f87171', border:'1px solid rgba(220,38,38,0.3)', borderRadius:6, padding:'6px 12px', cursor:'pointer', fontSize:12 },
+  btnEdit: { background:'rgba(245,197,24,0.15)', color:'#F5C518', border:'1px solid rgba(245,197,24,0.3)', borderRadius:6, padding:'6px 12px', cursor:'pointer', fontSize:12 },
+  card: { background:'#1a1a1a', border:'1px solid #222', borderRadius:12, padding:'1.25rem', marginBottom:12 },
+  overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center', padding:20 },
+  modal: { background:'#1a1a1a', border:'1px solid #333', borderRadius:16, padding:'2rem', width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' },
+  label: { display:'block', color:'#888', fontSize:12, marginBottom:4, marginTop:16 },
+  input: { width:'100%', padding:'10px 12px', background:'#0d0d0d', border:'1px solid #333', borderRadius:8, color:'#fff', fontSize:14, boxSizing:'border-box' },
 };
 
 export default function Puestos() {
   const [posts, setPosts] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState(BLANK);
   const [newShift, setNewShift] = useState('');
 
-  const reload = () => {
-    setPosts(getPosts());
-    setEmployees(getEmployees());
-  };
-
+  const reload = () => setPosts(getPosts());
   useEffect(() => { reload(); }, []);
 
-  const openAdd = () => { setForm(EMPTY_FORM); setEditingId(null); setShowModal(true); };
-  const openEdit = (p) => { setForm({ ...p }); setEditingId(p.id); setShowModal(true); };
+  const open = (post=null) => {
+    setForm(post ? {...post, shifts:[...(post.shifts||['8:00AM/4:00PM'])]} : {...BLANK, id: Date.now().toString()});
+    setModal(true);
+  };
+  const close = () => setModal(false);
 
-  const handleSave = () => {
-    if (!form.name) return alert('El nombre del puesto es requerido.');
-    if (editingId) {
-      updatePost(editingId, form);
-    } else {
-      addPost(form);
-    }
+  const save = () => {
+    if(!form.name.trim()){ alert('El nombre del puesto es requerido'); return; }
+    savePost(form);
     reload();
-    setShowModal(false);
+    close();
+  };
+
+  const del = (id) => {
+    if(window.confirm('¿Eliminar este puesto?')){ deletePost(id); reload(); }
   };
 
   const addShift = () => {
-    if (!newShift || !/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(newShift)) {
-      return alert('Formato de turno inválido. Use HH:MM-HH:MM (ej: 7:00-15:00)');
-    }
-    setForm(f => ({ ...f, shifts: [...(f.shifts || []), newShift] }));
-    setNewShift('');
+    if(newShift.trim()){ setForm(f=>({...f,shifts:[...(f.shifts||[]),newShift.trim()]})); setNewShift(''); }
   };
 
-  const removeShift = (shift) => setForm(f => ({ ...f, shifts: f.shifts.filter(s => s !== shift) }));
+  const removeShift = (idx) => setForm(f=>({...f,shifts:f.shifts.filter((_,i)=>i!==idx)}));
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={S.page}>
+      <div style={S.header}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#0a1628' }}>Puestos de Seguridad</h1>
-          <p style={{ margin: '4px 0 0', color: '#888', fontSize: 14 }}>{posts.length} puestos configurados</p>
+          <h1 style={S.title}>Puestos</h1>
+          <p style={{ color:'#666', margin:'4px 0 0', fontSize:14 }}>{posts.length} puestos registrados</p>
         </div>
-        <button onClick={openAdd} style={{
-          background: '#F5C518', color: '#0d0d0d', border: 'none', borderRadius: 10,
-          padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-        }}>
-          + Nuevo Puesto
-        </button>
+        <button style={S.btn} onClick={()=>open()}>+ Añadir puesto</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-        {posts.map(post => {
-          const assignedGuards = employees.filter(e => e.postAssignment === post.id && e.status === 'active');
-          const coverage = assignedGuards.length >= post.requiredGuards;
-
-          return (
-            <div key={post.id} style={{
-              background: 'white', borderRadius: 14, overflow: 'hidden',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-            }}>
-              <div style={{
-                background: coverage ? '#0d0d0d' : '#7f1d1d',
-                padding: '16px 20px',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <h3 style={{ margin: 0, color: 'white', fontSize: 16, fontWeight: 700 }}>{post.name}</h3>
-                    <p style={{ margin: '2px 0 0', color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>{post.location}</p>
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
-                    background: coverage ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.3)',
-                    color: coverage ? '#86efac' : '#fca5a5',
-                  }}>
-                    {coverage ? '✓ Cubierto' : '⚠ Déficit'}
-                  </span>
-                </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:16 }}>
+        {posts.map(post => (
+          <div key={post.id} style={S.card}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:16, color:'#F5C518' }}>{post.name}</div>
+                {post.location && <div style={{ color:'#888', fontSize:12, marginTop:2 }}>📍 {post.location}</div>}
+                {post.address && <div style={{ color:'#666', fontSize:11, marginTop:2 }}>{post.address}</div>}
               </div>
-
-              <div style={{ padding: '16px 20px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14, fontSize: 12 }}>
-                  <div>
-                    <div style={{ color: '#aaa' }}>Guardias requeridos</div>
-                    <div style={{ fontWeight: 700, color: '#111', fontSize: 16 }}>{post.requiredGuards}</div>
-                  </div>
-                  <div>
-                    <div style={{ color: '#aaa' }}>Guardias asignados</div>
-                    <div style={{ fontWeight: 700, color: coverage ? '#166534' : '#b91c1c', fontSize: 16 }}>
-                      {assignedGuards.length}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6, fontWeight: 600 }}>TURNOS</div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {post.shifts?.map(s => (
-                      <span key={s} style={{
-                        background: '#e0e7ff', color: '#3730a3', fontSize: 11, fontWeight: 600,
-                        borderRadius: 5, padding: '3px 8px',
-                      }}>
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {assignedGuards.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6, fontWeight: 600 }}>GUARDIAS ASIGNADOS</div>
-                    {assignedGuards.map(emp => (
-                      <div key={emp.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        padding: '4px 0', borderBottom: '1px solid #f5f5f5',
-                        fontSize: 13,
-                      }}>
-                        <div style={{
-                          width: 24, height: 24, borderRadius: '50%',
-                          background: '#dbeafe', color: '#c9a000',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 10, fontWeight: 700,
-                        }}>
-                          {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-                        <span style={{ color: '#333' }}>{emp.name}</span>
-                        <span style={{
-                          marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                          color: emp.type === 'full-time' ? '#F5C518' : '#92400e',
-                          background: emp.type === 'full-time' ? '#dbeafe' : '#fef3c7',
-                          padding: '1px 5px', borderRadius: 3,
-                        }}>
-                          {emp.type === 'full-time' ? 'FT' : 'PT'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <button onClick={() => openEdit(post)} style={{
-                  width: '100%', padding: '8px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  background: '#f0f4ff', color: '#c9a000', border: 'none', cursor: 'pointer',
-                }}>
-                  Editar puesto
-                </button>
+              <span style={{ background: post.armed ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.15)', border:`1px solid ${post.armed ? 'rgba(239,68,68,0.3)' : 'rgba(52,211,153,0.3)'}`, borderRadius:4, padding:'2px 8px', fontSize:11, color: post.armed ? '#f87171' : '#34d399', flexShrink:0 }}>
+                {post.armed ? '🔫 Armado' : '🛡 Desarmado'}
+              </span>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <div style={{ color:'#666', fontSize:11, marginBottom:4 }}>TURNOS:</div>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {(post.shifts||[]).map((s,i) => (
+                  <span key={i} style={{ background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:4, padding:'2px 8px', fontSize:12, color:'#93c5fd' }}>{s}</span>
+                ))}
               </div>
             </div>
-          );
-        })}
+            <div style={{ display:'flex', gap:8 }}>
+              <button style={S.btnEdit} onClick={()=>open(post)}>Editar</button>
+              <button style={S.btnRed} onClick={()=>del(post.id)}>Eliminar</button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {showModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
-        }}>
-          <div style={{
-            background: 'white', borderRadius: 16, padding: '28px 32px',
-            width: '100%', maxWidth: 480,
-          }}>
-            <h2 style={{ margin: '0 0 24px', fontSize: 20, fontWeight: 700 }}>
-              {editingId ? 'Editar Puesto' : 'Nuevo Puesto'}
-            </h2>
+      {posts.length === 0 && (
+        <div style={{ textAlign:'center', color:'#444', padding:'3rem' }}>No hay puestos. Añade el primero.</div>
+      )}
 
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label style={labelStyle}>Nombre del puesto *</label>
-                <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Ubicación / Área</label>
-                <input style={inputStyle} value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Guardias requeridos</label>
-                <input style={inputStyle} type="number" min={1} value={form.requiredGuards} onChange={e => setForm(f => ({ ...f, requiredGuards: parseInt(e.target.value) }))} />
-              </div>
+      {modal && (
+        <div style={S.overlay} onClick={e=>e.target===e.currentTarget&&close()}>
+          <div style={S.modal}>
+            <h2 style={{ color:'#F5C518', margin:'0 0 1rem', fontSize:18 }}>{form.id && posts.find(p=>p.id===form.id) ? 'Editar' : 'Nuevo'} Puesto</h2>
 
-              <div>
-                <label style={labelStyle}>Turnos</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                  {form.shifts?.map(s => (
-                    <span key={s} style={{
-                      background: '#e0e7ff', color: '#3730a3', fontSize: 12, fontWeight: 600,
-                      borderRadius: 5, padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 6,
-                    }}>
-                      {s}
-                      <button onClick={() => removeShift(s)} style={{
-                        background: 'none', border: 'none', cursor: 'pointer', color: '#7c3aed', fontSize: 14, padding: 0,
-                      }}>×</button>
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    style={{ ...inputStyle, flex: 1 }} placeholder="7:00-15:00"
-                    value={newShift} onChange={e => setNewShift(e.target.value)}
-                  />
-                  <button onClick={addShift} style={{
-                    padding: '9px 14px', background: '#e0e7ff', color: '#3730a3',
-                    border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700,
-                  }}>+</button>
-                </div>
+            <label style={S.label}>Nombre del puesto *</label>
+            <input style={S.input} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ej. CSM-CAGUAS" />
+
+            <label style={S.label}>Localización</label>
+            <input style={S.input} value={form.location||''} onChange={e=>setForm({...form,location:e.target.value})} placeholder="Ej. Caguas" />
+
+            <label style={S.label}>Dirección</label>
+            <input style={S.input} value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})} placeholder="Dirección completa" />
+
+            <label style={S.label}>Tipo</label>
+            <select style={S.input} value={form.armed?'armed':'unarmed'} onChange={e=>setForm({...form,armed:e.target.value==='armed'})}>
+              <option value="unarmed">Desarmado</option>
+              <option value="armed">Armado</option>
+            </select>
+
+            <label style={S.label}>Turnos disponibles</label>
+            {(form.shifts||[]).map((s,i) => (
+              <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+                <span style={{ flex:1, color:'#93c5fd', fontSize:13 }}>{s}</span>
+                <button onClick={()=>removeShift(i)} style={{ background:'none', border:'none', color:'#f87171', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
+            ))}
+            <div style={{ display:'flex', gap:8, marginTop:8 }}>
+              <input style={{ ...S.input, flex:1 }} value={newShift} onChange={e=>setNewShift(e.target.value)}
+                placeholder="Ej. 8:00AM/5:00PM" onKeyDown={e=>e.key==='Enter'&&addShift()} />
+              <button onClick={addShift} style={{ ...S.btn, padding:'10px 16px', flexShrink:0 }}>+</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-              <button onClick={() => setShowModal(false)} style={{
-                flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-                background: '#f5f5f5', color: '#555', border: 'none', cursor: 'pointer',
-              }}>Cancelar</button>
-              <button onClick={handleSave} style={{
-                flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-                background: '#F5C518', color: '#0d0d0d', border: 'none', cursor: 'pointer',
-              }}>
-                {editingId ? 'Guardar' : 'Crear puesto'}
-              </button>
+            <label style={S.label}>Notas</label>
+            <textarea style={{ ...S.input, height:80, resize:'vertical' }} value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} />
+
+            <div style={{ display:'flex', gap:10, marginTop:20 }}>
+              <button style={{ ...S.btn, flex:1 }} onClick={save}>Guardar</button>
+              <button style={{ background:'rgba(220,38,38,0.15)', color:'#f87171', border:'1px solid rgba(220,38,38,0.3)', borderRadius:8, padding:'10px', flex:1, cursor:'pointer', fontWeight:600 }} onClick={close}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -233,9 +138,3 @@ export default function Puestos() {
     </div>
   );
 }
-
-const labelStyle = { display: 'block', fontSize: 12, color: '#666', fontWeight: 600, marginBottom: 4 };
-const inputStyle = {
-  width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 14,
-  border: '1px solid #e0e0e0', outline: 'none', boxSizing: 'border-box',
-};
