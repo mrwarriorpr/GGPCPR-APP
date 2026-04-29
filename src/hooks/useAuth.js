@@ -1,39 +1,45 @@
 // src/hooks/useAuth.js
-import { createContext, useContext, useState, useEffect } from 'react';
-import { authenticateUser } from '../data/store';
+import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
 
+const USERS = [
+  { id: 1, username: 'admin',       password: 'GGPC2024!',     name: 'Administrador', role: 'admin' },
+  { id: 2, username: 'supervisor1', password: 'Super2024!',    name: 'Supervisor 1',  role: 'supervisor' },
+  { id: 3, username: 'supervisor2', password: 'Super2024!',    name: 'Supervisor 2',  role: 'supervisor' },
+  { id: 4, username: 'manager',     password: 'Manager2024!',  name: 'Gerente RRHH',  role: 'manager' },
+  { id: 5, username: 'director',    password: 'Director2024!', name: 'Director',      role: 'director' },
+  ];
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState(() => {
+          try { return JSON.parse(sessionStorage.getItem('ggpc_session')); } catch { return null; }
+    });
+    const [loading] = useState(false);
 
-  useEffect(() => {
-    const stored = sessionStorage.getItem('ggpc_session');
-    if (stored) { try { setUser(JSON.parse(stored)); } catch {} }
-    setLoading(false);
-  }, []);
-
-  const login = async (username, password) => {
-    const found = await authenticateUser(username, password);
-    if (found) {
-      setUser(found);
-      sessionStorage.setItem('ggpc_session', JSON.stringify(found));
-      return true;
-    }
-    return false;
+  const login = (username, password) => {
+        const found = USERS.find(
+                u => u.username === username.trim() && u.password === password
+              );
+        if (found) {
+                const { password: _, ...safe } = found;
+                sessionStorage.setItem('ggpc_session', JSON.stringify(safe));
+                setUser(safe);
+                return true;
+        }
+        return false;
   };
 
   const logout = () => {
-    setUser(null);
-    sessionStorage.removeItem('ggpc_session');
+        sessionStorage.removeItem('ggpc_session');
+        setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
+        <AuthContext.Provider value={{ user, login, logout, loading }}>
+{children}
+</AuthContext.Provider>
   );
 }
 
-export function useAuth() { return useContext(AuthContext); }
+export const useAuth = () => useContext(AuthContext);
