@@ -1,59 +1,98 @@
 // src/data/store.js
-const KEYS = { EMP:'ggpc_employees', POSTS:'ggpc_posts', SCHED:'ggpc_schedules', APPTS:'ggpc_appointments' };
-
-const get = (key) => { try { return JSON.parse(localStorage.getItem(key)||'[]'); } catch { return []; } };
-const set = (key,val) => localStorage.setItem(key, JSON.stringify(val));
+import { supabase } from '../supabaseClient';
 
 // Employees
-export const getEmployees = () => get(KEYS.EMP);
-export const saveEmployee = (emp) => {
-  const list = get(KEYS.EMP);
-  const idx = list.findIndex(e=>e.id===emp.id);
-  if(idx>=0) list[idx]=emp; else list.push(emp);
-  set(KEYS.EMP, list);
+export const getEmployees = async () => {
+  const { data, error } = await supabase.from('employees').select('*').order('id');
+  if (error) throw error;
+  return data || [];
 };
-export const deleteEmployee = (id) => set(KEYS.EMP, get(KEYS.EMP).filter(e=>e.id!==id));
+
+export const saveEmployee = async (emp) => {
+  const { data, error } = await supabase
+    .from('employees')
+    .upsert(emp)
+    .select();
+
+  if (error) throw error;
+  return data?.[0];
+};
+
+export const deleteEmployee = async (id) => {
+  const { error } = await supabase.from('employees').delete().eq('id', id);
+  if (error) throw error;
+};
 
 // Posts
-export const getPosts = () => get(KEYS.POSTS);
-export const savePost = (post) => {
-  const list = get(KEYS.POSTS);
-  const idx = list.findIndex(p=>p.id===post.id);
-  if(idx>=0) list[idx]=post; else list.push(post);
-  set(KEYS.POSTS, list);
+export const getPosts = async () => {
+  const { data, error } = await supabase.from('posts').select('*').order('id');
+  if (error) throw error;
+  return data || [];
 };
-export const deletePost = (id) => set(KEYS.POSTS, get(KEYS.POSTS).filter(p=>p.id!==id));
+
+export const savePost = async (post) => {
+  const { data, error } = await supabase
+    .from('posts')
+    .upsert(post)
+    .select();
+
+  if (error) throw error;
+  return data?.[0];
+};
+
+export const deletePost = async (id) => {
+  const { error } = await supabase.from('posts').delete().eq('id', id);
+  if (error) throw error;
+};
 
 // Schedules
-export const getSchedules = () => get(KEYS.SCHED);
-export const saveSchedule = (sched) => {
-  const list = get(KEYS.SCHED);
-  const idx = list.findIndex(s=>s.id===sched.id);
-  if(idx>=0) list[idx]=sched; else list.push(sched);
-  set(KEYS.SCHED, list);
+export const getSchedules = async () => {
+  const { data, error } = await supabase.from('schedules').select('*').order('date');
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveSchedule = async (sched) => {
+  const { data, error } = await supabase
+    .from('schedules')
+    .upsert(sched)
+    .select();
+
+  if (error) throw error;
+  return data?.[0];
 };
 
 export const saveSchedules = saveSchedule;
 
-export const deleteSchedule = (id) => set(KEYS.SCHED, get(KEYS.SCHED).filter(s=>s.id!==id));
+export const deleteSchedule = async (id) => {
+  const { error } = await supabase.from('schedules').delete().eq('id', id);
+  if (error) throw error;
+};
 
 // Appointments
-export const getAppointments = () => get(KEYS.APPTS);
-export const saveAppointment = (appt) => {
-  const list = get(KEYS.APPTS);
-  const idx = list.findIndex(a=>a.id===appt.id);
-  if(idx>=0) list[idx]=appt; else list.push(appt);
-  set(KEYS.APPTS, list);
+export const getAppointments = async () => {
+  const { data, error } = await supabase.from('appointments').select('*').order('date');
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveAppointment = async (appt) => {
+  const { data, error } = await supabase
+    .from('appointments')
+    .upsert(appt)
+    .select();
+
+  if (error) throw error;
+  return data?.[0];
 };
 
 export const addAppointment = saveAppointment;
 
-export const deleteAppointment = (id) => set(KEYS.APPTS, get(KEYS.APPTS).filter(a=>a.id!==id));
+export const deleteAppointment = async (id) => {
+  const { error } = await supabase.from('appointments').delete().eq('id', id);
+  if (error) throw error;
+};
 
-export const initializeStorage = () => {
-  // Initialize with empty arrays if not set
-  if(!localStorage.getItem(KEYS.EMP)) set(KEYS.EMP, []);
-  if(!localStorage.getItem(KEYS.POSTS)) set(KEYS.POSTS, []);
-  if(!localStorage.getItem(KEYS.SCHED)) set(KEYS.SCHED, []);
-  if(!localStorage.getItem(KEYS.APPTS)) set(KEYS.APPTS, []);
+export const initializeStorage = async () => {
+  return true;
 };
