@@ -42,6 +42,9 @@ export const saveAppointment = (appt) => {
   if(idx>=0) list[idx]=appt; else list.push(appt);
   set(KEYS.APPTS, list);
 };
+
+export const addAppointment = saveAppointment;
+
 export const deleteAppointment = (id) => set(KEYS.APPTS, get(KEYS.APPTS).filter(a=>a.id!==id));
 
 export const initializeStorage = () => {
