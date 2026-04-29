@@ -32,6 +32,9 @@ export const saveSchedule = (sched) => {
   if(idx>=0) list[idx]=sched; else list.push(sched);
   set(KEYS.SCHED, list);
 };
+
+export const saveSchedules = saveSchedule;
+
 export const deleteSchedule = (id) => set(KEYS.SCHED, get(KEYS.SCHED).filter(s=>s.id!==id));
 
 // Appointments
