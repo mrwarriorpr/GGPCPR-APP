@@ -1,315 +1,265 @@
 // src/pages/Horarios.jsx
 import { useState, useEffect } from 'react';
-import { getSchedules, saveSchedules, getEmployees, getPosts } from '../data/store';
-import { generateBiweeklySchedule, getBiweekStart, formatDateDisplay, getWeekDates, formatDate } from '../utils/scheduler';
+import { getEmployees, getPosts, getSchedules, saveSchedule, deleteSchedule } from '../data/store';
 
-const SHIFT_COLORS = {
-  '7:00-15:00': { bg: '#dbeafe', text: '#F5C518' },
-  '15:00-23:00': { bg: '#fce7f3', text: '#9d174d' },
-  '23:00-7:00': { bg: '#ede9fe', text: '#5b21b6' },
-  '6:00-14:00': { bg: '#dcfce7', text: '#166534' },
-  '14:00-22:00': { bg: '#fef9c3', text: '#854d0e' },
-  '6:00-18:00': { bg: '#ffedd5', text: '#9a3412' },
-  '18:00-6:00': { bg: '#f1f5f9', text: '#475569' },
-};
+const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DIAS_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
-function getShiftColor(shift) {
-  return SHIFT_COLORS[shift] || { bg: '#f0f0f0', text: '#555' };
+function getBisemana(offset=0) {
+  const today = new Date();
+  const day = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (day===0?6:day-1) + offset*14);
+  return Array.from({length:14},(_,i)=>{ const d=new Date(monday); d.setDate(monday.getDate()+i); return d; });
+}
+
+function fmt(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+
+function checkConflict(emp, date, shift) {
+  if(!emp) return null;
+  const d = date instanceof Date ? date : new Date(date.split('/').reverse().join('-'));
+  const dow = d.getDay();
+  const r = emp.restrictions || [];
+  const isNight = shift && (shift.includes('PM/') || (parseInt(shift)>=18) || shift.toLowerCase().includes('noche') || shift.startsWith('6:00PM') || shift.startsWith('7:00PM') || shift.startsWith('8:00PM') || shift.startsWith('10:00PM') || shift.startsWith('11:00PM'));
+  const isDay = !isNight;
+  if(r.includes('only_night') && isDay) return { type:'block', msg:`${emp.name} SOLO trabaja turno nocturno` };
+  if(r.includes('only_day') && isNight) return { type:'block', msg:`${emp.name} SOLO trabaja turno diurno` };
+  if(r.includes('no_weekend') && (dow===0||dow===6)) return { type:'warn', msg:`${emp.name} normalmente no trabaja fines de semana` };
+  if(r.includes('no_monday') && dow===1) return { type:'warn', msg:`${emp.name} normalmente no trabaja lunes` };
+  if(r.includes('no_tuesday') && dow===2) return { type:'warn', msg:`${emp.name} normalmente no trabaja martes` };
+  if(r.includes('no_wednesday') && dow===3) return { type:'warn', msg:`${emp.name} normalmente no trabaja miércoles` };
+  if(r.includes('no_thursday') && dow===4) return { type:'warn', msg:`${emp.name} normalmente no trabaja jueves` };
+  if(r.includes('no_friday') && dow===5) return { type:'warn', msg:`${emp.name} normalmente no trabaja viernes` };
+  return null;
 }
 
 export default function Horarios() {
-  const [schedule, setSchedule] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [posts, setPosts] = useState([]);
-  const [biweekStart, setBiweekStart] = useState(null);
-  const [biweekEnd, setBiweekEnd] = useState(null);
-  const [activeWeek, setActiveWeek] = useState(0);
-  const [viewMode, setViewMode] = useState('employee'); // 'employee' | 'post'
-  const [generating, setGenerating] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [schedules, setSchedules] = useState([]);
+  const [bisemana, setBisemana] = useState(0);
+  const [selectedPost, setSelectedPost] = useState('all');
+  const [dragEmp, setDragEmp] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [overrideMode, setOverrideMode] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState(null);
+  const [pendingAssign, setPendingAssign] = useState(null);
 
-  const reload = () => {
-    const emps = getEmployees();
-    const pts = getPosts();
-    setEmployees(emps);
-    setPosts(pts);
+  const days = getBisemana(bisemana);
+  const reload = () => { setSchedules(getSchedules()); };
+  useEffect(() => { setEmployees(getEmployees()); setPosts(getPosts()); reload(); }, []);
 
-    let existing = getSchedules();
-    if (existing.length === 0) {
-      const result = generateBiweeklySchedule();
-      existing = result.schedule;
-      saveSchedules(existing);
-      setBiweekStart(result.biweekStart);
-      setBiweekEnd(result.biweekEnd);
-    } else {
-      const bw = getBiweekStart();
-      setBiweekStart(bw);
-      setBiweekEnd(new Date(bw.getTime() + 13 * 24 * 60 * 60 * 1000));
+  const schedMap = {};
+  schedules.forEach(s => { schedMap[s.employeeId+'_'+s.date] = s; });
+
+  const getEmpSchedule = (empId, date) => schedMap[empId+'_'+fmt(date)];
+
+  const assignShift = (empId, date, shift, postId, force=false) => {
+    const emp = employees.find(e=>e.id===empId);
+    if(!force && emp) {
+      const conflict = checkConflict(emp, date, shift);
+      if(conflict) {
+        setConflictInfo(conflict);
+        setPendingAssign({empId,date,shift,postId});
+        return;
+      }
     }
-    setSchedule(existing);
+    const dateStr = fmt(date);
+    const existing = schedMap[empId+'_'+dateStr];
+    saveSchedule({ id: existing?.id || Date.now().toString(), employeeId:empId, date:dateStr, shift, postId: postId||'' });
+    reload();
+    setConflictInfo(null);
+    setPendingAssign(null);
   };
 
-  useEffect(() => { reload(); }, []);
-
-  const handleGenerate = async () => {
-    if (!window.confirm('¿Regenerar el horario bisemanal? Se reemplazará el horario actual.')) return;
-    setGenerating(true);
-    await new Promise(r => setTimeout(r, 800));
-    const result = generateBiweeklySchedule();
-    saveSchedules(result.schedule);
-    setSchedule(result.schedule);
-    setBiweekStart(result.biweekStart);
-    setBiweekEnd(result.biweekEnd);
-    setGenerating(false);
+  const removeShift = (empId, date) => {
+    const dateStr = fmt(date);
+    const s = schedMap[empId+'_'+dateStr];
+    if(s) { deleteSchedule(s.id); reload(); }
   };
 
-  const handleExportPDF = async () => {
-    setExporting(true);
-    try {
-      const { exportScheduleToPDF } = await import('../utils/pdfExport');
-      await exportScheduleToPDF(schedule, biweekStart, biweekEnd, employees, posts);
-    } catch (err) {
-      alert('Error exportando PDF. Intente de nuevo.');
-      console.error(err);
-    }
-    setExporting(false);
+  const onDrop = (empId, date) => {
+    if(!dragEmp || dragEmp===empId) return;
+    const src = getEmpSchedule(dragEmp, date);
+    if(src) { assignShift(empId, date, src.shift, src.postId); }
+    setDragEmp(null);
   };
 
-  const weekStart = biweekStart ? new Date(biweekStart.getTime() + activeWeek * 7 * 24 * 60 * 60 * 1000) : null;
-  const weekDates = weekStart ? getWeekDates(weekStart) : [];
-  const activeEmployees = employees.filter(e => e.status === 'active');
+  const openAssign = (empId, date) => {
+    const post = posts.find(p=>p.id===selectedPost) || posts[0];
+    setModal({ empId, date, postId: post?.id||'', shift: post?.shifts?.[0]||'8:00AM/4:00PM' });
+  };
+
+  const filteredPosts = selectedPost==='all' ? posts : posts.filter(p=>p.id===selectedPost);
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+    <div style={{ color:'#fff' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem', flexWrap:'wrap', gap:12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#0a1628' }}>Plan de Trabajo Bisemanal</h1>
-          {biweekStart && biweekEnd && (
-            <p style={{ margin: '4px 0 0', color: '#888', fontSize: 14 }}>
-              {formatDateDisplay(biweekStart)} – {formatDateDisplay(biweekEnd)}
-            </p>
-          )}
+          <h1 style={{ fontSize:'1.6rem', fontWeight:800, color:'#F5C518', margin:0 }}>Horarios</h1>
+          <p style={{ color:'#666', margin:'4px 0 0', fontSize:14 }}>
+            {fmt(days[0])} — {fmt(days[13])}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={handleGenerate} disabled={generating} style={{
-            padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            background: generating ? '#e0e0e0' : '#0d0d0d', color: generating ? '#aaa' : 'white',
-            border: 'none',
-          }}>
-            {generating ? '⟳ Generando...' : '⟳ Regenerar'}
-          </button>
-          <button onClick={handleExportPDF} disabled={exporting} style={{
-            padding: '10px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            background: exporting ? '#e0e0e0' : '#b94040', color: exporting ? '#aaa' : 'white',
-            border: 'none',
-          }}>
-            {exporting ? 'Exportando...' : '⬇ Exportar PDF'}
-          </button>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button onClick={()=>setBisemana(b=>b-1)} style={{ background:'#1a1a1a', border:'1px solid #333', color:'#fff', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>← Anterior</button>
+          <button onClick={()=>setBisemana(0)} style={{ background:'rgba(245,197,24,0.15)', border:'1px solid rgba(245,197,24,0.3)', color:'#F5C518', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>Bisemana actual</button>
+          <button onClick={()=>setBisemana(b=>b+1)} style={{ background:'#1a1a1a', border:'1px solid #333', color:'#fff', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>Siguiente →</button>
         </div>
       </div>
 
-      {/* Week selector & view mode */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', background: 'white', borderRadius: 10, border: '1px solid #e0e0e0', overflow: 'hidden' }}>
-          {[0, 1].map(w => (
-            <button key={w} onClick={() => setActiveWeek(w)} style={{
-              padding: '8px 20px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: activeWeek === w ? '#0d0d0d' : 'white',
-              color: activeWeek === w ? 'white' : '#555',
-            }}>
-              Semana {w + 1}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', background: 'white', borderRadius: 10, border: '1px solid #e0e0e0', overflow: 'hidden' }}>
-          {[['employee', 'Por Empleado'], ['post', 'Por Puesto']].map(([v, l]) => (
-            <button key={v} onClick={() => setViewMode(v)} style={{
-              padding: '8px 18px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: viewMode === v ? '#F5C518' : 'white',
-              color: viewMode === v ? 'white' : '#555',
-            }}>
-              {l}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {Object.entries(SHIFT_COLORS).slice(0, 4).map(([shift, colors]) => (
-            <span key={shift} style={{
-              background: colors.bg, color: colors.text,
-              fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 5,
-            }}>
-              {shift}
-            </span>
-          ))}
-        </div>
+      {/* Filtro por puesto */}
+      <div style={{ marginBottom:16 }}>
+        <select value={selectedPost} onChange={e=>setSelectedPost(e.target.value)}
+          style={{ padding:'8px 14px', background:'#1a1a1a', border:'1px solid #333', borderRadius:8, color:'#fff', fontSize:14 }}>
+          <option value="all">Todos los puestos</option>
+          {posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
       </div>
 
-      {/* Schedule grid */}
-      <div style={{ background: 'white', borderRadius: 14, overflow: 'auto', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        {viewMode === 'employee' ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
-            <thead>
-              <tr style={{ background: '#0d0d0d' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                  Guardia
-                </th>
-                {weekDates.map(d => (
-                  <th key={d} style={{ padding: '12px 8px', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: 600, minWidth: 80 }}>
-                    <div>{d.toLocaleDateString('es-PR', { weekday: 'short' })}</div>
-                    <div style={{ fontWeight: 400, opacity: 0.7, fontSize: 11 }}>{d.toLocaleDateString('es-PR', { month: 'short', day: 'numeric' })}</div>
-                  </th>
-                ))}
-                <th style={{ padding: '12px 12px', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: 600 }}>Hrs</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeEmployees.map((emp, idx) => {
-                let weekHours = 0;
+      {/* Leyenda */}
+      <div style={{ display:'flex', gap:16, marginBottom:16, fontSize:12, flexWrap:'wrap' }}>
+        <span style={{ color:'#34d399' }}>● Turno asignado</span>
+        <span style={{ color:'#666' }}>○ Sin turno (click para asignar)</span>
+        <span style={{ color:'#fbbf24' }}>⚠ Restricción (con override)</span>
+        <span style={{ color:'#f87171' }}>🚫 Bloqueado por restricción</span>
+      </div>
+
+      {/* Tabla bisemana */}
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ borderCollapse:'collapse', minWidth:900, width:'100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign:'left', padding:'8px 12px', color:'#666', fontSize:12, borderBottom:'1px solid #222', minWidth:150 }}>Empleado</th>
+              {days.map((d,i) => {
+                const isToday = fmt(d)===fmt(new Date());
                 return (
-                  <tr key={emp.id} style={{ borderTop: '1px solid #f0f0f0', background: idx % 2 === 0 ? 'white' : '#fafafa' }}>
-                    <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontWeight: 600, color: '#0a1628', fontSize: 14 }}>{emp.name}</div>
-                      <div style={{ fontSize: 11, color: '#aaa' }}>{emp.badge} · {emp.type === 'full-time' ? 'FT' : 'PT'}</div>
-                    </td>
-                    {weekDates.map(d => {
-                      const dateStr = formatDate(d);
-                      const daySchedules = schedule.filter(s => s.employeeId === emp.id && s.date === dateStr);
-                      if (daySchedules.length > 0) weekHours += daySchedules[0].hours || 0;
-                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
-                      return (
-                        <td key={d} style={{
-                          padding: '6px 4px', textAlign: 'center',
-                          background: isWeekend ? '#fafafa' : 'transparent',
-                        }}>
-                          {daySchedules.length > 0 ? (
-                            <div>
-                              {daySchedules.map(s => {
-                                const colors = getShiftColor(s.shift);
-                                return (
-                                  <div key={s.id} style={{
-                                    background: colors.bg, color: colors.text,
-                                    borderRadius: 5, padding: '3px 4px', fontSize: 10, fontWeight: 700,
-                                    marginBottom: 2,
-                                  }}>
-                                    {s.shift}
-                                    {s.isOvertime && <span style={{ display: 'block', fontSize: 9, opacity: 0.8 }}>OT</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#ddd', fontSize: 16 }}>–</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <span style={{
-                        fontSize: 13, fontWeight: 700,
-                        color: weekHours > 40 ? '#b94040' : weekHours >= 32 ? '#166534' : '#888',
-                      }}>
-                        {weekHours.toFixed(0)}h
-                      </span>
-                    </td>
-                  </tr>
+                  <th key={i} style={{ padding:'6px 4px', color: isToday ? '#F5C518' : '#666', fontSize:11, borderBottom:'1px solid #222', textAlign:'center', minWidth:60,
+                    borderLeft: i===7 ? '2px solid #333' : 'none' }}>
+                    <div style={{ fontWeight:600 }}>{DIAS[d.getDay()]}</div>
+                    <div style={{ fontSize:10 }}>{d.getDate()}/{d.getMonth()+1}</div>
+                  </th>
                 );
               })}
-            </tbody>
-          </table>
-        ) : (
-          /* By post view */
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
-            <thead>
-              <tr style={{ background: '#0d0d0d' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', color: 'white', fontSize: 12, fontWeight: 600 }}>Puesto</th>
-                <th style={{ padding: '12px 12px', textAlign: 'center', color: 'white', fontSize: 12, fontWeight: 600 }}>Turno</th>
-                {weekDates.map(d => (
-                  <th key={d} style={{ padding: '12px 8px', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: 600, minWidth: 80 }}>
-                    <div>{d.toLocaleDateString('es-PR', { weekday: 'short' })}</div>
-                    <div style={{ fontWeight: 400, opacity: 0.7, fontSize: 11 }}>{d.toLocaleDateString('es-PR', { month: 'short', day: 'numeric' })}</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {posts.map((post, pIdx) =>
-                (post.shifts || []).map((shift, sIdx) => {
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map(emp => (
+              <tr key={emp.id} style={{ borderBottom:'1px solid #1a1a1a' }}
+                draggable onDragStart={()=>setDragEmp(emp.id)}>
+                <td style={{ padding:'8px 12px', fontSize:13, whiteSpace:'nowrap' }}>
+                  <div style={{ fontWeight:500 }}>{emp.name}</div>
+                  <div style={{ color:'#555', fontSize:11 }}>
+                    {emp.type==='parttime'?'Part-time':'Full-time'}
+                    {emp.restrictions?.includes('only_night') && ' · 🌙'}
+                    {emp.restrictions?.includes('only_day') && ' · ☀️'}
+                  </div>
+                </td>
+                {days.map((d,i) => {
+                  const s = getEmpSchedule(emp.id, d);
+                  const isToday = fmt(d)===fmt(new Date());
                   return (
-                    <tr key={`${post.id}-${shift}`} style={{
-                      borderTop: '1px solid #f0f0f0',
-                      background: pIdx % 2 === 0 ? 'white' : '#fafafa',
-                    }}>
-                      {sIdx === 0 && (
-                        <td rowSpan={post.shifts.length} style={{
-                          padding: '10px 16px', fontWeight: 700, color: '#0a1628', fontSize: 14,
-                          borderRight: '2px solid #e8f5f0', verticalAlign: 'top',
-                        }}>
-                          {post.name}
-                          <div style={{ fontSize: 11, color: '#aaa', fontWeight: 400 }}>{post.location}</div>
-                          <div style={{ fontSize: 11, color: '#0f6e56', fontWeight: 600, marginTop: 2 }}>Req: {post.requiredGuards}</div>
-                        </td>
+                    <td key={i} style={{ padding:'3px', textAlign:'center', background: isToday?'rgba(245,197,24,0.03)':'transparent', borderLeft: i===7?'2px solid #333':'none' }}
+                      onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(emp.id,d)}>
+                      {s?.shift ? (
+                        <div style={{ background:'rgba(52,211,153,0.15)', border:'1px solid rgba(52,211,153,0.3)', borderRadius:4, padding:'3px 2px', cursor:'pointer', fontSize:10, color:'#34d399', position:'relative' }}
+                          onClick={()=>openAssign(emp.id,d)}
+                          title={s.shift+(s.postId&&posts.find(p=>p.id===s.postId)?' - '+posts.find(p=>p.id===s.postId).name:'')}>
+                          <div style={{ fontWeight:600, fontSize:9 }}>{s.shift.replace(':00','').replace('AM','a').replace('PM','p')}</div>
+                          <button onClick={e=>{e.stopPropagation();removeShift(emp.id,d);}} style={{ position:'absolute',top:-4,right:-4,background:'#ef4444',border:'none',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1 }}>✕</button>
+                        </div>
+                      ) : (
+                        <div style={{ color:'#2a2a2a', cursor:'pointer', fontSize:18, lineHeight:'32px', borderRadius:4, border:'1px dashed #222' }}
+                          onClick={()=>openAssign(emp.id,d)}
+                          onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(emp.id,d)}>
+                          +
+                        </div>
                       )}
-                      <td style={{ padding: '6px 12px', textAlign: 'center' }}>
-                        <span style={{ ...getShiftColor(shift), borderRadius: 5, padding: '3px 8px', fontSize: 11, fontWeight: 700 }}>
-                          {shift}
-                        </span>
-                      </td>
-                      {weekDates.map(d => {
-                        const dateStr = formatDate(d);
-                        const daySchedules = schedule.filter(s => s.postId === post.id && s.shift === shift && s.date === dateStr);
-                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
-                        return (
-                          <td key={d} style={{
-                            padding: '5px 4px', textAlign: 'center',
-                            background: isWeekend ? '#f8fafb' : 'transparent',
-                          }}>
-                            {daySchedules.length > 0 ? (
-                              daySchedules.map(s => (
-                                <div key={s.id} style={{ fontSize: 11, fontWeight: 600 }}>
-                                  {s.isVacancy ? (
-                                    <span style={{ color: '#b91c1c', background: '#fee2e2', borderRadius: 4, padding: '2px 5px' }}>VACANTE</span>
-                                  ) : (
-                                    <span style={{ color: '#166534' }}>{s.employeeName.split(' ')[0]}</span>
-                                  )}
-                                </div>
-                              ))
-                            ) : (
-                              <span style={{ color: '#ddd' }}>–</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                    </td>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        )}
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 20 }}>
-        {[
-          { label: 'Total turnos semana', value: schedule.filter(s => !s.isVacancy && s.weekNum === activeWeek).length, color: '#c9a000' },
-          { label: 'Vacantes', value: schedule.filter(s => s.isVacancy && s.weekNum === activeWeek).length, color: '#b94040' },
-          { label: 'Turnos overtime', value: schedule.filter(s => s.isOvertime && s.weekNum === activeWeek).length, color: '#b97000' },
-          { label: 'Turnos domingo', value: schedule.filter(s => s.isSunday && !s.isVacancy && s.weekNum === activeWeek).length, color: '#7c3aed' },
-        ].map(stat => (
-          <div key={stat.label} style={{
-            background: 'white', borderRadius: 10, padding: '14px 16px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderLeft: `3px solid ${stat.color}`,
-          }}>
-            <div style={{ fontSize: 11, color: '#999', marginBottom: 4 }}>{stat.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+      {/* Modal asignar turno */}
+      {modal && !conflictInfo && (
+        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }}
+          onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+          <div style={{ background:'#1a1a1a',border:'1px solid #333',borderRadius:16,padding:'2rem',width:'100%',maxWidth:420 }}>
+            <h3 style={{ color:'#F5C518',margin:'0 0 1rem',fontSize:16 }}>
+              Asignar turno — {employees.find(e=>e.id===modal.empId)?.name}
+            </h3>
+            <p style={{ color:'#888',fontSize:13,margin:'0 0 1rem' }}>{DIAS_FULL[modal.date.getDay()]}, {fmt(modal.date)}</p>
+
+            <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Puesto</label>
+            <select value={modal.postId} onChange={e=>setModal({...modal,postId:e.target.value,shift:posts.find(p=>p.id===e.target.value)?.shifts?.[0]||modal.shift})}
+              style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:12,boxSizing:'border-box' }}>
+              <option value="">Sin puesto específico</option>
+              {posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Turno</label>
+            <select value={modal.shift} onChange={e=>setModal({...modal,shift:e.target.value})}
+              style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:16,boxSizing:'border-box' }}>
+              {(posts.find(p=>p.id===modal.postId)?.shifts||['8:00AM/4:00PM','4:00PM/12:00AM','12:00AM/8:00AM']).map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+
+            <div style={{ display:'flex',gap:10 }}>
+              <button onClick={()=>{ assignShift(modal.empId,modal.date,modal.shift,modal.postId); setModal(null); }}
+                style={{ flex:1,padding:'10px',background:'#F5C518',color:'#000',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer' }}>
+                Asignar
+              </button>
+              <button onClick={()=>setModal(null)} style={{ flex:1,padding:'10px',background:'rgba(220,38,38,0.15)',color:'#f87171',border:'1px solid rgba(220,38,38,0.3)',borderRadius:8,cursor:'pointer',fontWeight:600 }}>
+                Cancelar
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Modal conflicto/restricción */}
+      {conflictInfo && pendingAssign && (
+        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20 }}>
+          <div style={{ background:'#1a1a1a',border:`1px solid ${conflictInfo.type==='block'?'rgba(239,68,68,0.5)':'rgba(251,191,36,0.5)'}`,borderRadius:16,padding:'2rem',width:'100%',maxWidth:420 }}>
+            <div style={{ fontSize:32,textAlign:'center',marginBottom:12 }}>{conflictInfo.type==='block'?'🚫':'⚠️'}</div>
+            <h3 style={{ color:conflictInfo.type==='block'?'#f87171':'#fbbf24',margin:'0 0 1rem',textAlign:'center' }}>
+              {conflictInfo.type==='block'?'Restricción bloqueada':'Atención — Restricción'}
+            </h3>
+            <p style={{ color:'#ccc',fontSize:14,textAlign:'center',marginBottom:'1.5rem' }}>{conflictInfo.msg}</p>
+            {conflictInfo.type==='block' ? (
+              <div>
+                <p style={{ color:'#888',fontSize:12,textAlign:'center',marginBottom:12 }}>
+                  Puedes hacer override si lo autorizas manualmente (ej. llamaste al guardia y aceptó).
+                </p>
+                <div style={{ display:'flex',gap:10 }}>
+                  <button onClick={()=>{ assignShift(pendingAssign.empId,pendingAssign.date,pendingAssign.shift,pendingAssign.postId,true); setModal(null); }}
+                    style={{ flex:1,padding:'10px',background:'rgba(239,68,68,0.2)',color:'#f87171',border:'1px solid rgba(239,68,68,0.4)',borderRadius:8,cursor:'pointer',fontWeight:700 }}>
+                    Sí, autorizar override
+                  </button>
+                  <button onClick={()=>{ setConflictInfo(null); setPendingAssign(null); }}
+                    style={{ flex:1,padding:'10px',background:'#333',color:'#fff',border:'1px solid #444',borderRadius:8,cursor:'pointer',fontWeight:600 }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display:'flex',gap:10 }}>
+                <button onClick={()=>{ assignShift(pendingAssign.empId,pendingAssign.date,pendingAssign.shift,pendingAssign.postId,true); setModal(null); }}
+                  style={{ flex:1,padding:'10px',background:'#F5C518',color:'#000',border:'none',borderRadius:8,cursor:'pointer',fontWeight:700 }}>
+                  Sí, asignar de todas formas
+                </button>
+                <button onClick={()=>{ setConflictInfo(null); setPendingAssign(null); }}
+                  style={{ flex:1,padding:'10px',background:'#333',color:'#fff',border:'1px solid #444',borderRadius:8,cursor:'pointer',fontWeight:600 }}>
+                  No, cancelar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+              }
