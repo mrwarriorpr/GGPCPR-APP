@@ -1,289 +1,159 @@
 // src/pages/Empleados.jsx
 import { useState, useEffect } from 'react';
-import { getEmployees, getPosts, addEmployee, updateEmployee, deleteEmployee } from '../data/store';
+import { getEmployees, saveEmployee, deleteEmployee } from '../data/store';
 
-const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const DAY_LABELS = { L: 'Lun', M: 'Mar', X: 'Mié', J: 'Jue', V: 'Vie', S: 'Sáb', D: 'Dom' };
+const BLANK = { name:'', position:'Guardia', phone:'', email:'', employeeId:'', type:'fulltime', restrictions:[], notes:'' };
+const RESTRICTION_OPTIONS = [
+  { value:'only_day',   label:'Solo turno diurno (6am-6pm)' },
+  { value:'only_night', label:'Solo turno nocturno (6pm-6am)' },
+  { value:'no_weekend', label:'No trabaja fines de semana' },
+  { value:'no_monday',  label:'No disponible lunes' },
+  { value:'no_tuesday', label:'No disponible martes' },
+  { value:'no_wednesday',label:'No disponible miércoles' },
+  { value:'no_thursday',label:'No disponible jueves' },
+  { value:'no_friday',  label:'No disponible viernes' },
+];
 
-const EMPTY_FORM = {
-  name: '', badge: '', type: 'full-time', phone: '', email: '',
-  availableDays: ['L', 'M', 'X', 'J', 'V'], maxHoursPerWeek: 40,
-  preferredShifts: [], postAssignment: '', status: 'active',
-  hireDate: '', hourlyRate: 11.00,
+const S = {
+  page: { color:'#fff' },
+  header: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
+  title: { fontSize:'1.6rem', fontWeight:800, color:'#F5C518', margin:0 },
+  btn: { background:'#F5C518', color:'#000', border:'none', borderRadius:8, padding:'10px 20px', fontWeight:700, cursor:'pointer', fontSize:14 },
+  btnRed: { background:'rgba(220,38,38,0.15)', color:'#f87171', border:'1px solid rgba(220,38,38,0.3)', borderRadius:6, padding:'6px 12px', cursor:'pointer', fontSize:12 },
+  btnEdit: { background:'rgba(245,197,24,0.15)', color:'#F5C518', border:'1px solid rgba(245,197,24,0.3)', borderRadius:6, padding:'6px 12px', cursor:'pointer', fontSize:12 },
+  card: { background:'#1a1a1a', border:'1px solid #222', borderRadius:12, padding:'1.25rem', display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 },
+  badge: (color) => ({ background:`rgba(${color},0.15)`, border:`1px solid rgba(${color},0.3)`, borderRadius:4, padding:'2px 8px', fontSize:11 }),
+  overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center', padding:20 },
+  modal: { background:'#1a1a1a', border:'1px solid #333', borderRadius:16, padding:'2rem', width:'100%', maxWidth:500, maxHeight:'90vh', overflowY:'auto' },
+  label: { display:'block', color:'#888', fontSize:12, marginBottom:4, marginTop:16 },
+  input: { width:'100%', padding:'10px 12px', background:'#0d0d0d', border:'1px solid #333', borderRadius:8, color:'#fff', fontSize:14, boxSizing:'border-box' },
 };
 
 export default function Empleados() {
   const [employees, setEmployees] = useState([]);
-  const [posts, setPosts] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState(BLANK);
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all');
 
-  const reload = () => {
-    setEmployees(getEmployees());
-    setPosts(getPosts());
-  };
-
+  const reload = () => setEmployees(getEmployees());
   useEffect(() => { reload(); }, []);
 
-  const filtered = employees.filter(e => {
-    const matchSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.badge?.toLowerCase().includes(search.toLowerCase());
-    const matchType = filterType === 'all' || e.type === filterType;
-    return matchSearch && matchType;
-  });
+  const open = (emp=null) => { setForm(emp ? {...emp} : {...BLANK, id: Date.now().toString()}); setModal(true); };
+  const close = () => setModal(false);
 
-  const openAdd = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowModal(true);
-  };
-
-  const openEdit = (emp) => {
-    setForm({ ...emp });
-    setEditingId(emp.id);
-    setShowModal(true);
-  };
-
-  const handleSave = () => {
-    if (!form.name || !form.badge) return alert('Nombre y placa son requeridos.');
-    if (editingId) {
-      updateEmployee(editingId, form);
-    } else {
-      addEmployee(form);
-    }
+  const save = () => {
+    if(!form.name.trim()){ alert('El nombre es requerido'); return; }
+    saveEmployee(form);
     reload();
-    setShowModal(false);
+    close();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('¿Eliminar este empleado?')) {
-      deleteEmployee(id);
-      reload();
-    }
+  const del = (id) => {
+    if(window.confirm('¿Eliminar este empleado?')){ deleteEmployee(id); reload(); }
   };
 
-  const toggleDay = (day) => {
+  const toggleRestriction = (val) => {
     setForm(f => ({
       ...f,
-      availableDays: f.availableDays.includes(day)
-        ? f.availableDays.filter(d => d !== day)
-        : [...f.availableDays, day],
+      restrictions: f.restrictions?.includes(val)
+        ? f.restrictions.filter(r=>r!==val)
+        : [...(f.restrictions||[]), val]
     }));
   };
 
+  const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+
+  const restrictionLabel = { only_day:'Solo día', only_night:'Solo noche', no_weekend:'Sin fines de semana', no_monday:'Sin lunes', no_tuesday:'Sin martes', no_wednesday:'Sin miércoles', no_thursday:'Sin jueves', no_friday:'Sin viernes' };
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={S.page}>
+      <div style={S.header}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#0a1628' }}>Empleados</h1>
-          <p style={{ margin: '4px 0 0', color: '#888', fontSize: 14 }}>{employees.filter(e => e.status === 'active').length} guardias activos</p>
+          <h1 style={S.title}>Empleados</h1>
+          <p style={{ color:'#666', margin:'4px 0 0', fontSize:14 }}>{employees.length} empleados registrados</p>
         </div>
-        <button onClick={openAdd} style={{
-          background: '#F5C518', color: '#0d0d0d', border: 'none', borderRadius: 10,
-          padding: '10px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-        }}>
-          + Añadir Empleado
-        </button>
+        <button style={S.btn} onClick={() => open()}>+ Añadir empleado</button>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <input
-          placeholder="Buscar por nombre o placa..."
-          value={search} onChange={e => setSearch(e.target.value)}
-          style={{
-            flex: 1, minWidth: 220, padding: '9px 14px', borderRadius: 8, fontSize: 14,
-            border: '1px solid #e0e0e0', outline: 'none',
-          }}
-        />
-        {['all', 'full-time', 'part-time'].map(t => (
-          <button key={t} onClick={() => setFilterType(t)} style={{
-            padding: '9px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            background: filterType === t ? '#F5C518' : 'white',
-            color: filterType === t ? 'white' : '#555',
-            border: '1px solid ' + (filterType === t ? '#F5C518' : '#e0e0e0'),
-          }}>
-            {t === 'all' ? 'Todos' : t === 'full-time' ? 'Full-Time' : 'Part-Time'}
-          </button>
-        ))}
-      </div>
+      <input placeholder="Buscar empleado..." value={search} onChange={e=>setSearch(e.target.value)}
+        style={{ ...S.input, marginBottom:20, maxWidth:320 }} />
 
-      {/* Employee cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-        {filtered.map(emp => {
-          const post = posts.find(p => p.id === emp.postAssignment);
-          return (
-            <div key={emp.id} style={{
-              background: 'white', borderRadius: 14, padding: '20px',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-              border: emp.status === 'inactive' ? '1px solid #fee2e2' : '1px solid transparent',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    background: emp.type === 'full-time' ? '#dbeafe' : '#fef3c7',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 15, fontWeight: 700,
-                    color: emp.type === 'full-time' ? '#F5C518' : '#92400e',
-                  }}>
-                    {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#0a1628', fontSize: 15 }}>{emp.name}</div>
-                    <div style={{ color: '#888', fontSize: 12 }}>{emp.badge}</div>
-                  </div>
-                </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '3px 8px',
-                  background: emp.type === 'full-time' ? '#dbeafe' : '#fef3c7',
-                  color: emp.type === 'full-time' ? '#F5C518' : '#92400e',
-                }}>
-                  {emp.type === 'full-time' ? 'FULL-TIME' : 'PART-TIME'}
-                </span>
+      {filtered.map(emp => (
+        <div key={emp.id} style={S.card}>
+          <div style={{ flex:1 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(245,197,24,0.15)', border:'1px solid rgba(245,197,24,0.3)', display:'flex', alignItems:'center', justifyContent:'center', color:'#F5C518', fontWeight:700, fontSize:14, flexShrink:0 }}>
+                {emp.name.charAt(0).toUpperCase()}
               </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12, fontSize: 12 }}>
-                <div><span style={{ color: '#aaa' }}>Teléfono:</span> <span style={{ color: '#333' }}>{emp.phone}</span></div>
-                <div><span style={{ color: '#aaa' }}>Hrs/Sem:</span> <span style={{ color: '#333', fontWeight: 600 }}>{emp.maxHoursPerWeek}h</span></div>
-                <div><span style={{ color: '#aaa' }}>Puesto:</span> <span style={{ color: '#333' }}>{post?.name || '—'}</span></div>
-                <div><span style={{ color: '#aaa' }}>Tarifa:</span> <span style={{ color: '#333', fontWeight: 600 }}>${emp.hourlyRate}/h</span></div>
-              </div>
-
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>Días disponibles:</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {DAYS.map(d => (
-                    <span key={d} style={{
-                      width: 22, height: 22, borderRadius: 4, fontSize: 10, fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: emp.availableDays?.includes(d) ? '#dbeafe' : '#f0f0f0',
-                      color: emp.availableDays?.includes(d) ? '#F5C518' : '#ccc',
-                    }}>
-                      {d}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => openEdit(emp)} style={{
-                  flex: 1, padding: '7px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-                  background: '#f0f4ff', color: '#c9a000', border: 'none', cursor: 'pointer',
-                }}>
-                  Editar
-                </button>
-                <button onClick={() => handleDelete(emp.id)} style={{
-                  flex: 1, padding: '7px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-                  background: '#fff5f5', color: '#b91c1c', border: 'none', cursor: 'pointer',
-                }}>
-                  Eliminar
-                </button>
+              <div>
+                <div style={{ fontWeight:600, fontSize:15 }}>{emp.name}</div>
+                <div style={{ color:'#666', fontSize:12 }}>{emp.employeeId && `ID: ${emp.employeeId} · `}{emp.position}</div>
               </div>
             </div>
-          );
-        })}
-      </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:6 }}>
+              <span style={S.badge('245,197,24')}>{emp.type === 'parttime' ? 'Part-time' : 'Full-time'}</span>
+              {emp.restrictions?.map(r => (
+                <span key={r} style={S.badge('239,68,68')}>{restrictionLabel[r] || r}</span>
+              ))}
+            </div>
+            {emp.phone && <div style={{ color:'#555', fontSize:12, marginTop:6 }}>📞 {emp.phone}</div>}
+          </div>
+          <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+            <button style={S.btnEdit} onClick={() => open(emp)}>Editar</button>
+            <button style={S.btnRed} onClick={() => del(emp.id)}>Eliminar</button>
+          </div>
+        </div>
+      ))}
 
-      {/* Modal */}
-      {showModal && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          padding: 20,
-        }}>
-          <div style={{
-            background: 'white', borderRadius: 16, padding: '28px 32px',
-            width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
-          }}>
-            <h2 style={{ margin: '0 0 24px', fontSize: 20, fontWeight: 700 }}>
-              {editingId ? 'Editar Empleado' : 'Nuevo Empleado'}
-            </h2>
+      {filtered.length === 0 && (
+        <div style={{ textAlign:'center', color:'#444', padding:'3rem' }}>
+          {search ? 'No se encontraron empleados.' : 'No hay empleados. Añade el primero.'}
+        </div>
+      )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div style={{ gridColumn: 'span 2' }}>
-                <label style={labelStyle}>Nombre completo *</label>
-                <input style={inputStyle} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Número de Placa *</label>
-                <input style={inputStyle} value={form.badge} onChange={e => setForm(f => ({ ...f, badge: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Tipo</label>
-                <select style={inputStyle} value={form.type} onChange={e => {
-                  const t = e.target.value;
-                  setForm(f => ({ ...f, type: t, maxHoursPerWeek: t === 'full-time' ? 40 : 24 }));
-                }}>
-                  <option value="full-time">Full-Time</option>
-                  <option value="part-time">Part-Time</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Teléfono</label>
-                <input style={inputStyle} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Email</label>
-                <input style={inputStyle} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Puesto Asignado</label>
-                <select style={inputStyle} value={form.postAssignment} onChange={e => setForm(f => ({ ...f, postAssignment: Number(e.target.value) }))}>
-                  <option value="">Sin asignar</option>
-                  {posts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Tarifa por hora ($)</label>
-                <input style={inputStyle} type="number" step="0.25" value={form.hourlyRate} onChange={e => setForm(f => ({ ...f, hourlyRate: parseFloat(e.target.value) }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Máx. horas/semana</label>
-                <input style={inputStyle} type="number" value={form.maxHoursPerWeek} onChange={e => setForm(f => ({ ...f, maxHoursPerWeek: parseInt(e.target.value) }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Fecha de contratación</label>
-                <input style={inputStyle} type="date" value={form.hireDate} onChange={e => setForm(f => ({ ...f, hireDate: e.target.value }))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Estado</label>
-                <select style={inputStyle} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
+      {modal && (
+        <div style={S.overlay} onClick={e=>e.target===e.currentTarget&&close()}>
+          <div style={S.modal}>
+            <h2 style={{ color:'#F5C518', margin:'0 0 1rem', fontSize:18 }}>{form.id && employees.find(e=>e.id===form.id) ? 'Editar' : 'Nuevo'} Empleado</h2>
 
-              <div style={{ gridColumn: 'span 2' }}>
-                <label style={labelStyle}>Días disponibles para trabajar</label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                  {DAYS.map(d => (
-                    <button key={d} type="button" onClick={() => toggleDay(d)} style={{
-                      width: 44, height: 36, borderRadius: 7, fontSize: 12, fontWeight: 700,
-                      cursor: 'pointer', border: 'none',
-                      background: form.availableDays?.includes(d) ? '#F5C518' : '#f0f0f0',
-                      color: form.availableDays?.includes(d) ? 'white' : '#888',
-                    }}>
-                      {DAY_LABELS[d]}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <label style={S.label}>Nombre completo *</label>
+            <input style={S.input} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Ej. Juan Pérez" />
+
+            <label style={S.label}>ID de empleado</label>
+            <input style={S.input} value={form.employeeId||''} onChange={e=>setForm({...form,employeeId:e.target.value})} placeholder="Ej. EMP-001" />
+
+            <label style={S.label}>Puesto</label>
+            <input style={S.input} value={form.position||''} onChange={e=>setForm({...form,position:e.target.value})} placeholder="Guardia" />
+
+            <label style={S.label}>Tipo de empleado</label>
+            <select style={S.input} value={form.type||'fulltime'} onChange={e=>setForm({...form,type:e.target.value})}>
+              <option value="fulltime">Full-time</option>
+              <option value="parttime">Part-time</option>
+            </select>
+
+            <label style={S.label}>Teléfono</label>
+            <input style={S.input} value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="787-000-0000" />
+
+            <label style={S.label}>Email</label>
+            <input style={S.input} value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})} placeholder="correo@ejemplo.com" />
+
+            <label style={S.label}>Restricciones de turno</label>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:4 }}>
+              {RESTRICTION_OPTIONS.map(opt => (
+                <label key={opt.value} style={{ display:'flex', alignItems:'center', gap:8, color:'#ccc', fontSize:13, cursor:'pointer' }}>
+                  <input type="checkbox" checked={form.restrictions?.includes(opt.value)||false}
+                    onChange={()=>toggleRestriction(opt.value)} />
+                  {opt.label}
+                </label>
+              ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-              <button onClick={() => setShowModal(false)} style={{
-                flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-                background: '#f5f5f5', color: '#555', border: 'none', cursor: 'pointer',
-              }}>Cancelar</button>
-              <button onClick={handleSave} style={{
-                flex: 1, padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600,
-                background: '#F5C518', color: '#0d0d0d', border: 'none', cursor: 'pointer',
-              }}>
-                {editingId ? 'Guardar cambios' : 'Añadir empleado'}
-              </button>
+            <label style={S.label}>Notas</label>
+            <textarea style={{ ...S.input, height:80, resize:'vertical' }} value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Notas adicionales..." />
+
+            <div style={{ display:'flex', gap:10, marginTop:20 }}>
+              <button style={{ ...S.btn, flex:1 }} onClick={save}>Guardar</button>
+              <button style={{ ...S.btnRed, flex:1 }} onClick={close}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -291,9 +161,3 @@ export default function Empleados() {
     </div>
   );
 }
-
-const labelStyle = { display: 'block', fontSize: 12, color: '#666', fontWeight: 600, marginBottom: 4 };
-const inputStyle = {
-  width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 14,
-  border: '1px solid #e0e0e0', outline: 'none', boxSizing: 'border-box',
-};
