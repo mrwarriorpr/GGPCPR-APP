@@ -62,7 +62,15 @@ export const saveSchedule = async (sched) => {
   return data?.[0];
 };
 
-export const saveSchedules = saveSchedule;
+export const saveSchedules = async (schedules) => {
+  const { data, error } = await supabase
+    .from('schedules')
+    .upsert(schedules)
+    .select();
+
+  if (error) throw error;
+  return data || [];
+};
 
 export const deleteSchedule = async (id) => {
   const { error } = await supabase.from('schedules').delete().eq('id', id);
