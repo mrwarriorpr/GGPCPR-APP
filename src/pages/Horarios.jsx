@@ -205,6 +205,15 @@ doc.setLineWidth(0.3);
       doc.text(`Puesto: ${postName}`, 20, 78);
       doc.line(45, 79, 150, 79);
 
+      doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.3);
+
+doc.text('Armado', 158, 63);
+doc.rect(198, 58, 6, 6);
+
+doc.text('Desarmado', 158, 78);
+doc.rect(198, 73, 6, 6);
+
       // TABLA 1
       autoTable(doc, {
         startY: 95,
@@ -219,10 +228,14 @@ doc.setLineWidth(0.3);
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
-      doc.line(25, finalY, 95, finalY);
-      doc.setDrawColor(0, 0, 0);
+
+doc.setDrawColor(0, 0, 0);
 doc.setLineWidth(0.3);
-      doc.text('Firma del empleado', 45, finalY + 5);
+doc.line(25, finalY, 95, finalY);
+
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(9);
+doc.text('Firma del empleado', 45, finalY + 5);
 
       // PAGINA 2
       doc.addPage();
@@ -236,7 +249,7 @@ doc.setLineWidth(0.3);
       doc.setDrawColor(0, 0, 0);
 doc.setLineWidth(0.3);
       doc.text(`Puesto: ${postName}`, 25, 39);
-
+      
       autoTable(doc, {
         startY: 45,
         head: [['Fecha', 'Día', 'Turno']],
