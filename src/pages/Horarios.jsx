@@ -49,6 +49,7 @@ const loadImageAsBase64 = async (url) => {
 export default function Horarios() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeePDF, setSelectedEmployeePDF] = useState('all');
+  const [selectedPostPDF, setSelectedPostPDF] = useState('all');
   const [posts, setPosts] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [bisemana, setBisemana] = useState(0);
@@ -81,10 +82,16 @@ useEffect(() => {
   const schedMap = {};
   schedules.forEach(s => {
   const empId = s.employee_id || s.employeeId;
-  schedMap[empId + '_' + s.date] = s;
+  const key = empId + '_' + s.date;
+
+if (!schedMap[key]) {
+  schedMap[key] = [];
+}
+
+schedMap[key].push(s);
 });
 
-  const getEmpSchedule = (empId, date) => schedMap[empId+'_'+fmt(date)];
+  const getEmpSchedule = (empId, date) => schedMap[empId+'_'+fmt(date)] || [];
 
   const assignShift = async (empId, date, shift, postId, force=false) => {
     const emp = employees.find(e=>e.id===empId);
@@ -97,9 +104,21 @@ useEffect(() => {
       }
     }
     const dateStr = fmt(date);
-    const existing = schedMap[empId+'_'+dateStr];
-    await saveSchedule({
-  id: existing?.id || Date.now().toString(),
+   const existingSameDay = schedules.filter(s =>
+  String(s.employee_id || s.employeeId) === String(empId) &&
+  s.date === dateStr
+);
+
+if (existingSameDay.length > 0 && !force) {
+  const confirmAdd = window.confirm(
+    'Este empleado ya tiene un turno asignado ese día. ¿Deseas añadir otro turno adicional?'
+  );
+
+  if (!confirmAdd) return;
+}
+
+await saveSchedule({
+  id: Date.now().toString(),
   employee_id: empId,
   date: dateStr,
   shift,
@@ -112,16 +131,23 @@ useEffect(() => {
 
   const removeShift = async (empId, date) => {
     const dateStr = fmt(date);
-    const s = schedMap[empId+'_'+dateStr];
-    if(s) { 
-      await deleteSchedule(s.id); 
-      await reload(); }
+    const list = schedMap[empId+'_'+dateStr] || [];
+const s = list[0];
+
+if (s) {
+  await deleteSchedule(s.id);
+  await reload();
+}
   };
 
   const onDrop = (empId, date) => {
     if(!dragEmp || dragEmp===empId) return;
-    const src = getEmpSchedule(dragEmp, date);
-    if(src) { assignShift(empId, date, src.shift, src.post_id || src.postId); }
+    const srcList = getEmpSchedule(dragEmp, date);
+const src = srcList[0];
+
+if (src) {
+  assignShift(empId, date, src.shift, src.post_id || src.postId);
+}
     setDragEmp(null);
   };
 
@@ -132,29 +158,33 @@ useEffect(() => {
 
 const generateEmployeePDFs = async () => {
   const logoBase64 = await loadImageAsBase64('/logo-ggpc.jpg');
-  const list = selectedEmployeePDF === 'all'
-    ? employees
-    : employees.filter(e => String(e.id) === String(selectedEmployeePDF));
+ const employeeSelected = String(selectedEmployeePDF);
+
+const list = employeeSelected === 'all'
+  ? employees
+  : employees.filter(e => String(e.id) === employeeSelected);
 
   list.forEach((emp) => {
-    const empSchedules = days.map((day) => {
+    const empSchedules = days.flatMap((day) => {
       const dateStr = fmt(day);
 
-      const sched = schedules.find(s =>
-        String(s.employee_id || s.employeeId) === String(emp.id) &&
-        s.date === dateStr
-      );
+      const daySchedules = schedules.filter(s =>
+  String(s.employee_id || s.employeeId) === String(emp.id) &&
+  s.date === dateStr
+);
 
-      const postId = sched?.post_id || sched?.postId;
-      const post = posts.find(p => String(p.id) === String(postId));
+return daySchedules.map((sched) => {
+  const postId = sched?.post_id || sched?.postId;
+  const post = posts.find(p => String(p.id) === String(postId));
 
-      return {
-        date: dateStr,
-        day: DIAS_FULL[day.getDay()].toUpperCase(),
-        shift: sched?.shift || '',
-        postName: post?.name || sched?.post_name || '',
-        hours: sched?.hours || '',
-      };
+  return {
+    date: dateStr,
+    day: DIAS_FULL[day.getDay()].toUpperCase(),
+    shift: sched?.shift || '',
+    postName: post?.name || sched?.post_name || '',
+    hours: sched?.hours || '',
+  };
+});
     });
 
     const schedulesByPost = {};
@@ -167,7 +197,14 @@ const generateEmployeePDFs = async () => {
         schedulesByPost[key].push(s);
       });
 
-    Object.entries(schedulesByPost).forEach(([postName, scheds]) => {
+    Object.entries(schedulesByPost)
+  .filter(([postName]) => {
+    if (selectedPostPDF === 'all') return true;
+
+    const post = posts.find(p => p.name === postName);
+    return String(post?.id) === String(selectedPostPDF);
+  })
+  .forEach(([postName, scheds]) => {
       const doc = new jsPDF('p', 'mm', 'letter');
 
   // LOGO
@@ -208,11 +245,15 @@ doc.setLineWidth(0.3);
       doc.setDrawColor(0, 0, 0);
 doc.setLineWidth(0.3);
 
+doc.setDrawColor(0, 0, 0);
+doc.setFillColor(255, 255, 255);
+doc.setLineWidth(0.4);
+
 doc.text('Armado', 158, 63);
-doc.rect(198, 58, 6, 6);
+doc.rect(198, 58, 6, 6, 'S');
 
 doc.text('Desarmado', 158, 78);
-doc.rect(198, 73, 6, 6);
+doc.rect(198, 73, 6, 6, 'S');
 
       // TABLA 1
       autoTable(doc, {
@@ -221,10 +262,18 @@ doc.rect(198, 73, 6, 6);
         body: scheds.map(s => [s.date, s.day, '', '', '', '']),
         theme: 'grid',
         styles: {
-          fontSize: 9,
-          halign: 'center',
-          valign: 'middle',
-        }
+  fontSize: 9,
+  halign: 'center',
+  valign: 'middle',
+  lineColor: [0, 0, 0],
+  lineWidth: 0.2,
+  textColor: [0, 0, 0],
+},
+headStyles: {
+  fillColor: [255, 255, 255],
+  textColor: [0, 0, 0],
+  fontStyle: 'bold',
+},
       });
 
       const finalY = doc.lastAutoTable.finalY + 25;
@@ -307,6 +356,25 @@ doc.setLineWidth(0.3);
   ))}
 </select>
 
+<select
+  value={selectedPostPDF}
+  onChange={e => setSelectedPostPDF(e.target.value)}
+  style={{
+    padding:'8px 12px',
+    background:'#1a1a1a',
+    border:'1px solid #333',
+    borderRadius:8,
+    color:'#fff'
+  }}
+>
+  <option value="all">Todos los puestos</option>
+  {posts.map(post => (
+    <option key={post.id} value={String(post.id)}>
+      {post.name}
+    </option>
+  ))}
+</select>
+          
 <button
   onClick={generateEmployeePDFs}
   style={{
@@ -375,33 +443,79 @@ doc.setLineWidth(0.3);
                   </div>
                 </td>
                 {days.map((d,i) => {
-                  const s = getEmpSchedule(emp.id, d);
+                  const daySchedules = getEmpSchedule(emp.id, d);
+const s = daySchedules[0];
                   const isToday = fmt(d)===fmt(new Date());
                   return (
                     <td key={i} style={{ padding:'3px', textAlign:'center', background: isToday?'rgba(245,197,24,0.03)':'transparent', borderLeft: i===7?'2px solid #333':'none' }}
                       onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(emp.id,d)}>
-                      {s?.shift ? (
-                        <div style={{ background:'rgba(52,211,153,0.15)', border:'1px solid rgba(52,211,153,0.3)', borderRadius:4, padding:'3px 2px', cursor:'pointer', fontSize:10, color:'#34d399', position:'relative' }}
-                          onClick={()=>openAssign(emp.id,d)}
-                          title={
-  s.shift +
-  ((s.post_id || s.postId) && posts.find(p => String(p.id) === String(s.post_id || s.postId))
-    ? ' - ' + posts.find(p => String(p.id) === String(s.post_id || s.postId)).name
-    : '')
-}>
-                          <div style={{ fontWeight:600, fontSize:9 }}>{s.shift.replace(':00','').replace('AM','a').replace('PM','p')}</div>
-                          <div style={{ color:'#6ee7b7', fontSize:8 }}>
-  {posts.find(p => String(p.id) === String(s.post_id || s.postId))?.name || ''}
-</div>
-                          <button onClick={e=>{e.stopPropagation();removeShift(emp.id,d);}} style={{ position:'absolute',top:-4,right:-4,background:'#ef4444',border:'none',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1 }}>✕</button>
-                        </div>
-                      ) : (
-                        <div style={{ color:'#2a2a2a', cursor:'pointer', fontSize:18, lineHeight:'32px', borderRadius:4, border:'1px dashed #222' }}
-                          onClick={()=>openAssign(emp.id,d)}
-                          onDragOver={e=>e.preventDefault()} onDrop={()=>onDrop(emp.id,d)}>
-                          +
-                        </div>
-                      )}
+                      {daySchedules.length > 0 ? (
+  <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+    {daySchedules.map((s) => (
+      <div
+        key={s.id}
+        style={{
+          background:'rgba(52,211,153,0.15)',
+          border:'1px solid rgba(52,211,153,0.3)',
+          borderRadius:4,
+          padding:'3px 2px',
+          cursor:'pointer',
+          fontSize:10,
+          color:'#34d399',
+          position:'relative'
+        }}
+        onClick={()=>openAssign(emp.id,d)}
+      >
+        <div style={{ fontWeight:600, fontSize:9 }}>
+          {s.shift.replace(':00','').replace('AM','a').replace('PM','p')}
+        </div>
+
+        <div style={{ color:'#6ee7b7', fontSize:8 }}>
+          {posts.find(p => String(p.id) === String(s.post_id || s.postId))?.name || ''}
+        </div>
+
+        <button
+          onClick={e=>{ e.stopPropagation(); deleteSchedule(s.id).then(reload); }}
+          style={{
+            position:'absolute',
+            top:-4,
+            right:-4,
+            background:'#ef4444',
+            border:'none',
+            color:'#fff',
+            borderRadius:'50%',
+            width:14,
+            height:14,
+            fontSize:9,
+            cursor:'pointer',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            lineHeight:1
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    ))}
+  </div>
+) : (
+  <div
+    style={{
+      color:'#2a2a2a',
+      cursor:'pointer',
+      fontSize:18,
+      lineHeight:'32px',
+      borderRadius:4,
+      border:'1px dashed #222'
+    }}
+    onClick={()=>openAssign(emp.id,d)}
+    onDragOver={e=>e.preventDefault()}
+    onDrop={()=>onDrop(emp.id,d)}
+  >
+    +
+  </div>
+)}
                     </td>
                   );
                 })}
