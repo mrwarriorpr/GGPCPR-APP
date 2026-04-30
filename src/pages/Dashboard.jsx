@@ -47,11 +47,12 @@ export default function Dashboard() {
   }, []);
 
   // Map schedules by employeeId + date
-  const schedMap = {};
-  schedules.forEach(s => {
-    const key = s.employeeId + '_' + s.date;
-    schedMap[key] = s;
-  });
+ const schedMap = {};
+schedules.forEach(s => {
+  const empId = s.employee_id || s.employeeId;
+  const key = empId + '_' + s.date;
+  schedMap[key] = s;
+});
 
   const postMap = {};
   posts.forEach(p => { postMap[p.id] = p; });
@@ -129,9 +130,11 @@ export default function Dashboard() {
                           {sched && sched.shift ? (
                             <div style={{ fontSize:10, background:'rgba(52,211,153,0.15)', border:'1px solid rgba(52,211,153,0.3)', borderRadius:4, padding:'2px 4px', color:'#34d399' }}>
                               <div style={{ fontWeight:600 }}>{sched.shift}</div>
-                              {sched.postId && postMap[sched.postId] && (
-                                <div style={{ color:'#6ee7b7', fontSize:9 }}>{postMap[sched.postId].name}</div>
-                              )}
+                              {(sched.post_id || sched.postId) && postMap[sched.post_id || sched.postId] && (
+  <div style={{ color:'#6ee7b7', fontSize:9 }}>
+    {postMap[sched.post_id || sched.postId].name}
+  </div>
+)}
                             </div>
                           ) : (
                             <span style={{ color:'#333', fontSize:14 }}>—</span>
