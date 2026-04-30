@@ -46,15 +46,30 @@ export default function Horarios() {
   const [pendingAssign, setPendingAssign] = useState(null);
 
   const days = getBisemana(bisemana);
-  const reload = () => { setSchedules(getSchedules()); };
-  useEffect(() => { setEmployees(getEmployees()); setPosts(getPosts()); reload(); }, []);
+  const reload = async () => {
+  const data = await getSchedules();
+  setSchedules(data);
+};
 
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setEmployees(await getEmployees());
+      setPosts(await getPosts());
+      setSchedules(await getSchedules());
+    } catch (error) {
+      console.error('Error cargando horarios:', error);
+    }
+  };
+
+  loadData();
+}, []);
   const schedMap = {};
   schedules.forEach(s => { schedMap[s.employeeId+'_'+s.date] = s; });
 
   const getEmpSchedule = (empId, date) => schedMap[empId+'_'+fmt(date)];
 
-  const assignShift = (empId, date, shift, postId, force=false) => {
+  const assignShift = async (empId, date, shift, postId, force=false) => {
     const emp = employees.find(e=>e.id===empId);
     if(!force && emp) {
       const conflict = checkConflict(emp, date, shift);
@@ -66,16 +81,18 @@ export default function Horarios() {
     }
     const dateStr = fmt(date);
     const existing = schedMap[empId+'_'+dateStr];
-    saveSchedule({ id: existing?.id || Date.now().toString(), employeeId:empId, date:dateStr, shift, postId: postId||'' });
-    reload();
+    await saveSchedule({ id: existing?.id || Date.now().toString(), employeeId:empId, date:dateStr, shift, postId: postId||'' });
+    await reload();
     setConflictInfo(null);
     setPendingAssign(null);
   };
 
-  const removeShift = (empId, date) => {
+  const removeShift = async (empId, date) => {
     const dateStr = fmt(date);
     const s = schedMap[empId+'_'+dateStr];
-    if(s) { deleteSchedule(s.id); reload(); }
+    if(s) { 
+      await deleteSchedule(s.id); 
+      await reload(); }
   };
 
   const onDrop = (empId, date) => {
