@@ -23,8 +23,16 @@ export default function Puestos() {
   const [form, setForm] = useState(BLANK);
   const [newShift, setNewShift] = useState('');
 
-  const reload = () => setPosts(getPosts());
-  useEffect(() => { reload(); }, []);
+  const reload = async () => {
+  try {
+    const data = await getPosts();
+    setPosts(data);
+  } catch (error) {
+    console.error('Error cargando puestos:', error);
+  }
+};
+
+useEffect(() => { reload(); }, []);
 
   const open = (post=null) => {
     setForm(post ? {...post, shifts:[...(post.shifts||['8:00AM/4:00PM'])]} : {...BLANK, id: Date.now().toString()});
@@ -32,15 +40,18 @@ export default function Puestos() {
   };
   const close = () => setModal(false);
 
-  const save = () => {
+  const save = async () => {
     if(!form.name.trim()){ alert('El nombre del puesto es requerido'); return; }
-    savePost(form);
-    reload();
+   await savePost(form);
+    await reload();
     close();
   };
 
-  const del = (id) => {
-    if(window.confirm('¿Eliminar este puesto?')){ deletePost(id); reload(); }
+  const del = async (id) => {
+    if(window.confirm('¿Eliminar este puesto?')){ 
+      await deletePost(id); 
+      await reload();
+    }
   };
 
   const addShift = () => {
