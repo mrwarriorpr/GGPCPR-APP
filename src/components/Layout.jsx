@@ -29,7 +29,7 @@ export default function Layout({ children }) {
       }}>
         {/* Logo */}
         <div style={{ padding:'1rem', borderBottom:'1px solid #222', display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/logo.png" alt="GGPC" style={{ width:36, height:36, flexShrink:0 }}
+          <img src="/Logo_de_GGPC-removebg-preview.png" alt="GGPC" style={{ width:36, height:36, flexShrink:0 }}
             onError={e=>e.target.style.display='none'} />
           {!collapsed && <span style={{ color:'#F5C518', fontWeight:800, fontSize:13, letterSpacing:1 }}>GGPC</span>}
         </div>
