@@ -1,6 +1,8 @@
 // src/pages/Horarios.jsx
 import { useState, useEffect } from 'react';
 import { getEmployees, getPosts, getSchedules, saveSchedule, deleteSchedule } from '../data/store';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const DIAS_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -19,7 +21,7 @@ function checkConflict(emp, date, shift) {
   if(!emp) return null;
   const d = date instanceof Date ? date : new Date(date.split('/').reverse().join('-'));
   const dow = d.getDay();
-  const r = emp.restrictions || [];
+  const r = emp.preferred_shifts || emp.restrictions || [];
   const isNight = shift && (shift.includes('PM/') || (parseInt(shift)>=18) || shift.toLowerCase().includes('noche') || shift.startsWith('6:00PM') || shift.startsWith('7:00PM') || shift.startsWith('8:00PM') || shift.startsWith('10:00PM') || shift.startsWith('11:00PM'));
   const isDay = !isNight;
   if(r.includes('only_night') && isDay) return { type:'block', msg:`${emp.name} SOLO trabaja turno nocturno` };
@@ -41,7 +43,7 @@ export default function Horarios() {
   const [selectedPost, setSelectedPost] = useState('all');
   const [dragEmp, setDragEmp] = useState(null);
   const [modal, setModal] = useState(null);
-  const [overrideMode, setOverrideMode] = useState(false);
+
   const [conflictInfo, setConflictInfo] = useState(null);
   const [pendingAssign, setPendingAssign] = useState(null);
 
@@ -65,7 +67,10 @@ useEffect(() => {
   loadData();
 }, []);
   const schedMap = {};
-  schedules.forEach(s => { schedMap[s.employeeId+'_'+s.date] = s; });
+  schedules.forEach(s => {
+  const empId = s.employee_id || s.employeeId;
+  schedMap[empId + '_' + s.date] = s;
+});
 
   const getEmpSchedule = (empId, date) => schedMap[empId+'_'+fmt(date)];
 
@@ -81,7 +86,13 @@ useEffect(() => {
     }
     const dateStr = fmt(date);
     const existing = schedMap[empId+'_'+dateStr];
-    await saveSchedule({ id: existing?.id || Date.now().toString(), employeeId:empId, date:dateStr, shift, postId: postId||'' });
+    await saveSchedule({
+  id: existing?.id || Date.now().toString(),
+  employee_id: empId,
+  date: dateStr,
+  shift,
+  post_id: postId || null,
+});
     await reload();
     setConflictInfo(null);
     setPendingAssign(null);
@@ -98,7 +109,7 @@ useEffect(() => {
   const onDrop = (empId, date) => {
     if(!dragEmp || dragEmp===empId) return;
     const src = getEmpSchedule(dragEmp, date);
-    if(src) { assignShift(empId, date, src.shift, src.postId); }
+    if(src) { assignShift(empId, date, src.shift, src.post_id || src.postId); }
     setDragEmp(null);
   };
 
@@ -107,8 +118,168 @@ useEffect(() => {
     setModal({ empId, date, postId: post?.id||'', shift: post?.shifts?.[0]||'8:00AM/4:00PM' });
   };
 
-  const filteredPosts = selectedPost==='all' ? posts : posts.filter(p=>p.id===selectedPost);
+const generateEmployeePDFs = () => {
+  employees.forEach((emp) => {
+    const doc = new jsPDF('p', 'mm', 'letter');
 
+    const empSchedules = days.map((day) => {
+      const dateStr = fmt(day);
+      const sched = schedules.find(s =>
+        (s.employeeId === emp.id || s.employee_id === emp.id) &&
+        s.date === dateStr
+      );
+
+      const postId = sched?.postId || sched?.post_id;
+      const post = posts.find(p => String(p.id) === String(postId));
+
+      return {
+        date: dateStr,
+        day: DIAS_FULL[day.getDay()].toUpperCase(),
+        shift: sched?.shift || '',
+        postName: post?.name || sched?.post_name || '',
+        hours: sched?.hours || '',
+      };
+    });
+
+    const mainPost =
+      empSchedules.find(s => s.postName)?.postName ||
+      emp.post_name ||
+      emp.position ||
+      '________________';
+
+    // =====================
+    // PÁGINA 1 - ASISTENCIA
+    // =====================
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('GLOBAL GUARD PROTECTION CORP.', 70, 25);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('P. O. BOX 29596 SAN JUAN, P.R. 00929-0596, Tel.787-276-0400', 70, 31);
+
+    doc.setDrawColor(245, 197, 24);
+    doc.line(70, 33, 200, 33);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('HOJA DE ASISTENCIA', 105, 50, { align: 'center' });
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nombre: ${emp.name}`, 20, 65);
+    doc.line(45, 66, 150, 66);
+
+    doc.text(`Puesto: ${mainPost}`, 20, 78);
+    doc.line(45, 79, 150, 79);
+
+    doc.text('Armado', 160, 63);
+    doc.rect(200, 58, 6, 6);
+
+    doc.text('Desarmado', 160, 78);
+    doc.rect(200, 73, 6, 6);
+
+    autoTable(doc, {
+      startY: 95,
+      head: [[
+        'FECHA',
+        'DÍA',
+        'ENTRADA',
+        'TOMA DE\nALIMENTOS',
+        'SALIDA',
+        'TOTAL\nDE\nHORAS'
+      ]],
+      body: empSchedules.map(s => [
+        s.date,
+        s.day,
+        '',
+        '',
+        '',
+        ''
+      ]),
+      theme: 'grid',
+      styles: {
+        fontSize: 9,
+        halign: 'center',
+        valign: 'middle',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        textColor: [0, 0, 0],
+      },
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 40 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 25 },
+      },
+      margin: { left: 15, right: 15 },
+    });
+
+    const finalY = doc.lastAutoTable.finalY + 25;
+    doc.line(25, finalY, 95, finalY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Firma del empleado', 45, finalY + 5);
+
+    // =====================
+    // PÁGINA 2 - TURNOS
+    // =====================
+    doc.addPage();
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Turnos Asignados', 105, 20, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.text(emp.name.toUpperCase(), 25, 32);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Fecha', 'Día', 'Turno']],
+      body: empSchedules.map(s => [
+        s.date,
+        s.day.charAt(0) + s.day.slice(1).toLowerCase(),
+        s.shift || ''
+      ]),
+      theme: 'grid',
+      styles: {
+        fontSize: 12,
+        halign: 'center',
+        valign: 'middle',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        minCellHeight: 12,
+        textColor: [0, 0, 0],
+      },
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'normal',
+        fontSize: 16,
+      },
+      columnStyles: {
+        0: { cellWidth: 55 },
+        1: { cellWidth: 55, fontStyle: 'bold', fontSize: 16 },
+        2: { cellWidth: 55 },
+      },
+      margin: { left: 25, right: 25 },
+    });
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('*Este horario está sujeto a cambio.', 20, 245);
+
+    const safeName = emp.name.replace(/[^a-z0-9]/gi, '_');
+    doc.save(`Plan_de_Trabajo_${safeName}_${fmt(days[0]).replaceAll('/','-')}.pdf`);
+  });
+};
   return (
     <div style={{ color:'#fff' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem', flexWrap:'wrap', gap:12 }}>
@@ -119,6 +290,20 @@ useEffect(() => {
           </p>
         </div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button
+  onClick={generateEmployeePDFs}
+  style={{
+    background:'#F5C518',
+    border:'none',
+    color:'#000',
+    borderRadius:8,
+    padding:'8px 16px',
+    cursor:'pointer',
+    fontWeight:700
+  }}
+>
+  Descargar PDFs
+</button>
           <button onClick={()=>setBisemana(b=>b-1)} style={{ background:'#1a1a1a', border:'1px solid #333', color:'#fff', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>← Anterior</button>
           <button onClick={()=>setBisemana(0)} style={{ background:'rgba(245,197,24,0.15)', border:'1px solid rgba(245,197,24,0.3)', color:'#F5C518', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>Bisemana actual</button>
           <button onClick={()=>setBisemana(b=>b+1)} style={{ background:'#1a1a1a', border:'1px solid #333', color:'#fff', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>Siguiente →</button>
@@ -168,8 +353,8 @@ useEffect(() => {
                   <div style={{ fontWeight:500 }}>{emp.name}</div>
                   <div style={{ color:'#555', fontSize:11 }}>
                     {emp.type==='parttime'?'Part-time':'Full-time'}
-                    {emp.restrictions?.includes('only_night') && ' · 🌙'}
-                    {emp.restrictions?.includes('only_day') && ' · ☀️'}
+                    {(emp.preferred_shifts || emp.restrictions || []).includes('only_night') && ' · 🌙'}
+{(emp.preferred_shifts || emp.restrictions || []).includes('only_day') && ' · ☀️'}
                   </div>
                 </td>
                 {days.map((d,i) => {
@@ -181,7 +366,12 @@ useEffect(() => {
                       {s?.shift ? (
                         <div style={{ background:'rgba(52,211,153,0.15)', border:'1px solid rgba(52,211,153,0.3)', borderRadius:4, padding:'3px 2px', cursor:'pointer', fontSize:10, color:'#34d399', position:'relative' }}
                           onClick={()=>openAssign(emp.id,d)}
-                          title={s.shift+(s.postId&&posts.find(p=>p.id===s.postId)?' - '+posts.find(p=>p.id===s.postId).name:'')}>
+                          title={
+  s.shift +
+  ((s.post_id || s.postId) && posts.find(p => String(p.id) === String(s.post_id || s.postId))
+    ? ' - ' + posts.find(p => String(p.id) === String(s.post_id || s.postId)).name
+    : '')
+}>
                           <div style={{ fontWeight:600, fontSize:9 }}>{s.shift.replace(':00','').replace('AM','a').replace('PM','p')}</div>
                           <button onClick={e=>{e.stopPropagation();removeShift(emp.id,d);}} style={{ position:'absolute',top:-4,right:-4,background:'#ef4444',border:'none',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1 }}>✕</button>
                         </div>
