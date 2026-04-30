@@ -29,9 +29,21 @@ export default function Dashboard() {
   const weekDays = getWeekDays();
 
   useEffect(() => {
-    setEmployees(getEmployees());
-    setPosts(getPosts());
-    setSchedules(getSchedules());
+    const loadData = async () => {
+    try {
+      const employeesData = await getEmployees();
+      const postsData = await getPosts();
+      const schedulesData = await getSchedules();
+
+      setEmployees(employeesData);
+      setPosts(postsData);
+      setSchedules(schedulesData);
+    } catch (error) {
+      console.error('Error cargando dashboard:', error);
+    }
+  };
+
+  loadData();
   }, []);
 
   // Map schedules by employeeId + date
