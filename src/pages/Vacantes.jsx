@@ -55,8 +55,8 @@ export default function Vacantes() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#0a1628' }}>Gestión de Vacantes</h1>
-        <p style={{ margin: '4px 0 0', color: '#888', fontSize: 14 }}>
+        <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#F5C518' }}>Gestión de Vacantes</h1>
+        <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 14 }}>
           {vacancies.length} vacante(s) en la bisemana actual
         </p>
       </div>
