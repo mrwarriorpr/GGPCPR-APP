@@ -9,8 +9,18 @@ export default function Vacantes() {
   const [availableEmps, setAvailableEmps] = useState([]);
 
   useEffect(() => {
-    setSchedule(getSchedules());
-  }, []);
+  const loadData = async () => {
+    try {
+      const data = await getSchedules();
+      setSchedule(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error cargando vacantes:', error);
+      setSchedule([]);
+    }
+  };
+
+  loadData();
+}, []);
 
   const vacancies = schedule.filter(s => s.isVacancy);
 
@@ -20,8 +30,9 @@ export default function Vacantes() {
     setAvailableEmps(available);
   };
 
-  const handleAssign = (empId) => {
-    const emp = getEmployees().find(e => e.id === empId);
+  const handleAssign = async (empId) => {
+  const employees = await getEmployees();
+  const emp = employees.find(e => e.id === empId);
     if (!emp) return;
     const updated = schedule.map(s => {
       if (s.id === selectedVacancy.id) {
@@ -29,7 +40,7 @@ export default function Vacantes() {
       }
       return s;
     });
-    saveSchedules(updated);
+    await saveSchedules(updated);
     setSchedule(updated);
     setSelectedVacancy(null);
     setAvailableEmps([]);
