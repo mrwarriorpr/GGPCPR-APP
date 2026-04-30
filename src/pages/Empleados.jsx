@@ -45,15 +45,44 @@ export default function Empleados() {
 };
   useEffect(() => { reload(); }, []);
 
-  const open = (emp=null) => { setForm(emp ? {...emp} : {...BLANK, id: Date.now().toString()}); setModal(true); };
-  const close = () => setModal(false);
+ const open = (emp=null) => {
+  setForm(emp ? {
+    ...emp,
+    employeeId: emp.badge || emp.employeeId || '',
+    type: emp.type === 'part-time' ? 'parttime' : 'fulltime',
+    restrictions: emp.preferred_shifts || emp.restrictions || [],
+  } : { ...BLANK });
 
-  const save = async () => {
-    if(!form.name.trim()){ alert('El nombre es requerido'); return; }
-    await saveEmployee(form);
-await reload();
+  setModal(true);
+};
+  const close = () => setModal(false);
+const save = async () => {
+  if (!form.name.trim()) {
+    alert('El nombre es requerido');
+    return;
+  }
+
+  try {
+    const employeeToSave = {
+      id: typeof form.id === 'number' ? form.id : undefined,
+      name: form.name,
+      badge: form.employeeId || form.badge || `G-${Date.now()}`,
+      type: form.type === 'parttime' ? 'part-time' : 'full-time',
+      phone: form.phone || null,
+      email: form.email || null,
+      status: 'active',
+      preferred_shifts: form.restrictions || [],
+      max_hours_per_week: form.type === 'parttime' ? 24 : 40,
+    };
+
+    await saveEmployee(employeeToSave);
+    await reload();
     close();
-  };
+  } catch (error) {
+    console.error('Error guardando empleado:', error);
+    alert('No se pudo guardar el empleado. Verifica que el ID/badge no esté repetido.');
+  }
+};
 
   const del = async (id) => {
    if(window.confirm('¿Eliminar este empleado?')){
@@ -99,12 +128,12 @@ await reload();
               </div>
               <div>
                 <div style={{ fontWeight:600, fontSize:15 }}>{emp.name}</div>
-                <div style={{ color:'#666', fontSize:12 }}>{emp.employeeId && `ID: ${emp.employeeId} · `}{emp.position}</div>
+                <div style={{ color:'#666', fontSize:12 }}>{(emp.badge || emp.employeeId) && `ID: ${emp.badge || emp.employeeId} · `}{emp.position || 'Guardia'}</div>
               </div>
             </div>
             <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:6 }}>
-              <span style={S.badge('245,197,24')}>{emp.type === 'parttime' ? 'Part-time' : 'Full-time'}</span>
-              {emp.restrictions?.map(r => (
+              <span style={S.badge('245,197,24')}>{emp.type === 'part-time' || emp.type === 'parttime' ? 'Part-time' : 'Full-time'}</span>
+              {(emp.preferred_shifts || emp.restrictions || []).map(r => (
                 <span key={r} style={S.badge('239,68,68')}>{restrictionLabel[r] || r}</span>
               ))}
             </div>
