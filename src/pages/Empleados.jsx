@@ -59,6 +59,7 @@ await reload();
    if(window.confirm('¿Eliminar este empleado?')){
   await deleteEmployee(id);
   await reload();
+  }
   };
 
   const toggleRestriction = (val) => {
