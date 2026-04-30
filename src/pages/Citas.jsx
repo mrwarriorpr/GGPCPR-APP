@@ -149,7 +149,7 @@ useEffect(() => {
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                          <span style={{ fontWeight: 700, color: '#0a1628', fontSize: 14 }}>
+                          <span style={{ fontWeight: 700, color: '#fff', fontSize: 14 }}>
                             {emp ? emp.name : 'Empleado no encontrado'}
                           </span>
                           <span style={{
