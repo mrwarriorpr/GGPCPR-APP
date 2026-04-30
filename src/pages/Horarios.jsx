@@ -121,20 +121,19 @@ useEffect(() => {
 
 const generateEmployeePDFs = () => {
   const list = selectedEmployeePDF === 'all'
-  ? employees
-  : employees.filter(e => String(e.id) === String(selectedEmployeePDF));
+    ? employees
+    : employees.filter(e => String(e.id) === String(selectedEmployeePDF));
 
-list.forEach((emp) => {
-    const doc = new jsPDF('p', 'mm', 'letter');
-
+  list.forEach((emp) => {
     const empSchedules = days.map((day) => {
       const dateStr = fmt(day);
+
       const sched = schedules.find(s =>
-        (s.employeeId === emp.id || s.employee_id === emp.id) &&
+        String(s.employee_id || s.employeeId) === String(emp.id) &&
         s.date === dateStr
       );
 
-      const postId = sched?.postId || sched?.post_id;
+      const postId = sched?.post_id || sched?.postId;
       const post = posts.find(p => String(p.id) === String(postId));
 
       return {
@@ -146,145 +145,105 @@ list.forEach((emp) => {
       };
     });
 
-    const mainPost =
-      empSchedules.find(s => s.postName)?.postName ||
-      emp.post_name ||
-      emp.position ||
-      '________________';
+    const schedulesByPost = {};
 
-    // =====================
-    // PÁGINA 1 - ASISTENCIA
-    // =====================
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('GLOBAL GUARD PROTECTION CORP.', 70, 25);
+    empSchedules
+      .filter(s => s.shift)
+      .forEach(s => {
+        const key = s.postName || 'SIN PUESTO';
+        if (!schedulesByPost[key]) schedulesByPost[key] = [];
+        schedulesByPost[key].push(s);
+      });
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text('P. O. BOX 29596 SAN JUAN, P.R. 00929-0596, Tel.787-276-0400', 70, 31);
+    Object.entries(schedulesByPost).forEach(([postName, scheds]) => {
+      const doc = new jsPDF('p', 'mm', 'letter');
 
-    doc.setDrawColor(245, 197, 24);
-    doc.line(70, 33, 200, 33);
+import logo from '../assets/logo.png';
+doc.addImage(logo, 'PNG', 20, 18, 40, 20);
+      
+      // HEADER
+     
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('GLOBAL GUARD PROTECTION CORP.', 65, 25);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('HOJA DE ASISTENCIA', 105, 50, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('P. O. BOX 29596 SAN JUAN, P.R. 00929-0596, Tel.787-276-0400', 65, 31);
 
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Nombre: ${emp.name}`, 20, 65);
-    doc.line(45, 66, 150, 66);
+      doc.setDrawColor(245, 197, 24);
+      doc.line(70, 33, 200, 33);
 
-    doc.text(`Puesto: ${mainPost}`, 20, 78);
-    doc.line(45, 79, 150, 79);
+      // TITULO
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('HOJA DE ASISTENCIA', 105, 50, { align: 'center' });
 
-    doc.text('Armado', 160, 63);
-    doc.rect(200, 58, 6, 6);
+      // INFO
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Nombre: ${emp.name}`, 20, 65);
+      doc.line(45, 66, 150, 66);
 
-    doc.text('Desarmado', 160, 78);
-    doc.rect(200, 73, 6, 6);
+      doc.text(`Puesto: ${postName}`, 20, 78);
+      doc.line(45, 79, 150, 79);
 
-    autoTable(doc, {
-      startY: 95,
-      head: [[
-        'FECHA',
-        'DÍA',
-        'ENTRADA',
-        'TOMA DE\nALIMENTOS',
-        'SALIDA',
-        'TOTAL\nDE\nHORAS'
-      ]],
-      body: empSchedules.map(s => [
-        s.date,
-        s.day,
-        '',
-        '',
-        '',
-        ''
-      ]),
-      theme: 'grid',
-      styles: {
-        fontSize: 9,
-        halign: 'center',
-        valign: 'middle',
-        lineColor: [0, 0, 0],
-        lineWidth: 0.2,
-        textColor: [0, 0, 0],
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-      },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 40 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 25 },
-      },
-      margin: { left: 15, right: 15 },
+      // TABLA 1
+      autoTable(doc, {
+        startY: 95,
+        head: [['FECHA', 'DÍA', 'ENTRADA', 'TOMA DE\nALIMENTOS', 'SALIDA', 'TOTAL\nDE\nHORAS']],
+        body: scheds.map(s => [s.date, s.day, '', '', '', '']),
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          halign: 'center',
+          valign: 'middle',
+        }
+      });
+
+      const finalY = doc.lastAutoTable.finalY + 25;
+      doc.line(25, finalY, 95, finalY);
+      doc.text('Firma del empleado', 45, finalY + 5);
+
+      // PAGINA 2
+      doc.addPage();
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Turnos Asignados', 105, 20, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.text(emp.name.toUpperCase(), 25, 32);
+      doc.text(`Puesto: ${postName}`, 25, 39);
+
+      autoTable(doc, {
+        startY: 45,
+        head: [['Fecha', 'Día', 'Turno']],
+        body: scheds.map(s => [
+          s.date,
+          s.day.charAt(0) + s.day.slice(1).toLowerCase(),
+          s.shift || ''
+        ]),
+        theme: 'grid',
+        styles: {
+          fontSize: 12,
+          halign: 'center',
+          valign: 'middle',
+        }
+      });
+
+      doc.setFontSize(9);
+      doc.text('*Este horario está sujeto a cambio.', 20, 245);
+
+      const safeName = emp.name.replace(/[^a-z0-9]/gi, '_');
+      const safePost = postName.replace(/[^a-z0-9]/gi, '_');
+
+      doc.save(`Plan_${safeName}_${safePost}_${fmt(days[0]).replaceAll('/','-')}.pdf`);
     });
-
-    const finalY = doc.lastAutoTable.finalY + 25;
-    doc.line(25, finalY, 95, finalY);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('Firma del empleado', 45, finalY + 5);
-
-    // =====================
-    // PÁGINA 2 - TURNOS
-    // =====================
-    doc.addPage();
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('Turnos Asignados', 105, 20, { align: 'center' });
-
-    doc.setFontSize(10);
-    doc.text(emp.name.toUpperCase(), 25, 32);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [['Fecha', 'Día', 'Turno']],
-      body: empSchedules.map(s => [
-        s.date,
-        s.day.charAt(0) + s.day.slice(1).toLowerCase(),
-        s.shift || ''
-      ]),
-      theme: 'grid',
-      styles: {
-        fontSize: 12,
-        halign: 'center',
-        valign: 'middle',
-        lineColor: [0, 0, 0],
-        lineWidth: 0.2,
-        minCellHeight: 12,
-        textColor: [0, 0, 0],
-      },
-      headStyles: {
-        fillColor: [255, 255, 255],
-        textColor: [0, 0, 0],
-        fontStyle: 'normal',
-        fontSize: 16,
-      },
-      columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 55, fontStyle: 'bold', fontSize: 16 },
-        2: { cellWidth: 55 },
-      },
-      margin: { left: 25, right: 25 },
-    });
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('*Este horario está sujeto a cambio.', 20, 245);
-
-    const safeName = emp.name.replace(/[^a-z0-9]/gi, '_');
-    doc.save(`Plan_de_Trabajo_${safeName}_${fmt(days[0]).replaceAll('/','-')}.pdf`);
   });
 };
+
+
   return (
     <div style={{ color:'#fff' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem', flexWrap:'wrap', gap:12 }}>
@@ -496,4 +455,4 @@ list.forEach((emp) => {
       )}
     </div>
   );
-              }
+}
