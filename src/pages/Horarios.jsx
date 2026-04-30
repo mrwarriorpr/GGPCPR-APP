@@ -195,9 +195,13 @@ doc.line(60, 37, 200, 37);
       // INFO
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
+      doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.3);
       doc.text(`Nombre: ${emp.name}`, 20, 65);
       doc.line(45, 66, 150, 66);
 
+      doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.3);
       doc.text(`Puesto: ${postName}`, 20, 78);
       doc.line(45, 79, 150, 79);
 
@@ -216,6 +220,8 @@ doc.line(60, 37, 200, 37);
 
       const finalY = doc.lastAutoTable.finalY + 25;
       doc.line(25, finalY, 95, finalY);
+      doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.3);
       doc.text('Firma del empleado', 45, finalY + 5);
 
       // PAGINA 2
@@ -227,6 +233,8 @@ doc.line(60, 37, 200, 37);
 
       doc.setFontSize(10);
       doc.text(emp.name.toUpperCase(), 25, 32);
+      doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.3);
       doc.text(`Puesto: ${postName}`, 25, 39);
 
       autoTable(doc, {
