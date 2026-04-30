@@ -35,6 +35,17 @@ function checkConflict(emp, date, shift) {
   return null;
 }
 
+const loadImageAsBase64 = async (url) => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};
+
 export default function Horarios() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeePDF, setSelectedEmployeePDF] = useState('all');
@@ -119,7 +130,8 @@ useEffect(() => {
     setModal({ empId, date, postId: post?.id||'', shift: post?.shifts?.[0]||'8:00AM/4:00PM' });
   };
 
-const generateEmployeePDFs = () => {
+const generateEmployeePDFs = async () => {
+  const logoBase64 = await loadImageAsBase64('/logo-ggpc.jpg');
   const list = selectedEmployeePDF === 'all'
     ? employees
     : employees.filter(e => String(e.id) === String(selectedEmployeePDF));
@@ -158,21 +170,22 @@ const generateEmployeePDFs = () => {
     Object.entries(schedulesByPost).forEach(([postName, scheds]) => {
       const doc = new jsPDF('p', 'mm', 'letter');
 
-import logo from '../assets/logo.png';
-doc.addImage(logo, 'PNG', 20, 18, 40, 20);
-      
-      // HEADER
-     
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.text('GLOBAL GUARD PROTECTION CORP.', 65, 25);
+  // LOGO
+doc.addImage(logoBase64, 'jpeg', 15, 10, 42, 42);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text('P. O. BOX 29596 SAN JUAN, P.R. 00929-0596, Tel.787-276-0400', 65, 31);
+// HEADER
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(15);
+doc.text('GLOBAL GUARD PROTECTION CORP.', 60, 28);
 
-      doc.setDrawColor(245, 197, 24);
-      doc.line(70, 33, 200, 33);
+doc.setFont('helvetica', 'normal');
+doc.setFontSize(9);
+doc.text('P. O. BOX 29596 SAN JUAN, P.R. 00929-0596, Tel.787-276-0400', 60, 35);
+
+doc.setDrawColor(245, 197, 24);
+doc.setLineWidth(0.3);
+doc.line(60, 37, 200, 37);    
+    
 
       // TITULO
       doc.setFont('helvetica', 'bold');
