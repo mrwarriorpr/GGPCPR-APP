@@ -73,8 +73,8 @@ useEffect(() => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#0a1628' }}>Citas y Ausencias</h1>
-          <p style={{ margin: '4px 0 0', color: '#888', fontSize: 14 }}>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#F5C518' }}>Citas y Ausencias</h1>
+          <p style={{ margin: '4px 0 0', color: '#ccc', fontSize: 14 }}>
             Registro de citas que afectan la disponibilidad de guardias
           </p>
         </div>
@@ -116,7 +116,7 @@ useEffect(() => {
 
           return (
             <div key={month} style={{ marginBottom: 20 }}>
-              <h2 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#5b21b6', textTransform: 'capitalize' }}>
+              <h2 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, color: '#F5C518', textTransform: 'capitalize' }}>
                 {monthName}
               </h2>
               <div style={{
