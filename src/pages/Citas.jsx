@@ -13,31 +13,44 @@ export default function Citas() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [filterEmp, setFilterEmp] = useState('');
 
-  const reload = () => {
-    setAppointments(getAppointments());
-    setEmployees(getEmployees().filter(e => e.status === 'active'));
-  };
+  const reload = async () => {
+  try {
+    const appts = await getAppointments();
+    const emps = await getEmployees();
 
-  useEffect(() => { reload(); }, []);
+    setAppointments(Array.isArray(appts) ? appts : []);
+    setEmployees(Array.isArray(emps) ? emps.filter(e => e.status === 'active') : []);
+  } catch (error) {
+    console.error('Error cargando citas:', error);
+    setAppointments([]);
+    setEmployees([]);
+  }
+};
 
-  const handleSave = () => {
+useEffect(() => {
+  reload();
+}, []);
+
+  const handleSave = async () => {
     if (!form.employeeId || !form.date) return alert('Empleado y fecha son requeridos.');
-    addAppointment({ ...form, employeeId: parseInt(form.employeeId) });
-    reload();
+    await addAppointment({ ...form, employeeId: parseInt(form.employeeId) });
+    await reload();
     setShowModal(false);
     setForm(EMPTY_FORM);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('¿Eliminar esta cita?')) {
-      deleteAppointment(id);
-      reload();
+     await deleteAppointment(id);
+     await reload();
     }
   };
 
-  const filtered = appointments
-    .filter(a => !filterEmp || String(a.employeeId) === filterEmp)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const filtered = Array.isArray(appointments)
+  ? appointments
+      .filter(a => !filterEmp || String(a.employeeId) === filterEmp)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  : [];
 
   // Group by month
   const grouped = filtered.reduce((acc, appt) => {
