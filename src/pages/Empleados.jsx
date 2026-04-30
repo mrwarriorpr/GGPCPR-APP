@@ -38,7 +38,7 @@ export default function Empleados() {
   const reload = async () => {
   try {
     const data = await getEmployees();
-    setEmployees(data);
+    setEmployees(Array.isArray(data) ? data : []);
   } catch (error) {
     console.error('Error cargando empleados:', error);
   }
@@ -70,7 +70,9 @@ await reload();
     }));
   };
 
-  const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = Array.isArray(employees)
+  ? employees.filter(e => (e.name || '').toLowerCase().includes(search.toLowerCase()))
+  : [];
 
   const restrictionLabel = { only_day:'Solo día', only_night:'Solo noche', no_weekend:'Sin fines de semana', no_monday:'Sin lunes', no_tuesday:'Sin martes', no_wednesday:'Sin miércoles', no_thursday:'Sin jueves', no_friday:'Sin viernes' };
 
