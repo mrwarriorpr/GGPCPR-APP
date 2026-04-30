@@ -37,6 +37,7 @@ function checkConflict(emp, date, shift) {
 
 export default function Horarios() {
   const [employees, setEmployees] = useState([]);
+  const [selectedEmployeePDF, setSelectedEmployeePDF] = useState('all');
   const [posts, setPosts] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [bisemana, setBisemana] = useState(0);
@@ -119,7 +120,11 @@ useEffect(() => {
   };
 
 const generateEmployeePDFs = () => {
-  employees.forEach((emp) => {
+  const list = selectedEmployeePDF === 'all'
+  ? employees
+  : employees.filter(e => String(e.id) === String(selectedEmployeePDF));
+
+list.forEach((emp) => {
     const doc = new jsPDF('p', 'mm', 'letter');
 
     const empSchedules = days.map((day) => {
@@ -290,7 +295,26 @@ const generateEmployeePDFs = () => {
           </p>
         </div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          <button
+         <select
+  value={selectedEmployeePDF}
+  onChange={e => setSelectedEmployeePDF(e.target.value)}
+  style={{
+    padding:'8px 12px',
+    background:'#1a1a1a',
+    border:'1px solid #333',
+    borderRadius:8,
+    color:'#fff'
+  }}
+>
+  <option value="all">Todos los empleados</option>
+  {employees.map(emp => (
+    <option key={emp.id} value={String(emp.id)}>
+      {emp.name}
+    </option>
+  ))}
+</select>
+
+<button
   onClick={generateEmployeePDFs}
   style={{
     background:'#F5C518',
@@ -302,7 +326,7 @@ const generateEmployeePDFs = () => {
     fontWeight:700
   }}
 >
-  Descargar PDFs
+  Descargar PDF
 </button>
           <button onClick={()=>setBisemana(b=>b-1)} style={{ background:'#1a1a1a', border:'1px solid #333', color:'#fff', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>← Anterior</button>
           <button onClick={()=>setBisemana(0)} style={{ background:'rgba(245,197,24,0.15)', border:'1px solid rgba(245,197,24,0.3)', color:'#F5C518', borderRadius:8, padding:'8px 16px', cursor:'pointer' }}>Bisemana actual</button>
@@ -373,6 +397,9 @@ const generateEmployeePDFs = () => {
     : '')
 }>
                           <div style={{ fontWeight:600, fontSize:9 }}>{s.shift.replace(':00','').replace('AM','a').replace('PM','p')}</div>
+                          <div style={{ color:'#6ee7b7', fontSize:8 }}>
+  {posts.find(p => String(p.id) === String(s.post_id || s.postId))?.name || ''}
+</div>
                           <button onClick={e=>{e.stopPropagation();removeShift(emp.id,d);}} style={{ position:'absolute',top:-4,right:-4,background:'#ef4444',border:'none',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1 }}>✕</button>
                         </div>
                       ) : (
