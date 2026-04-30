@@ -35,21 +35,30 @@ export default function Empleados() {
   const [form, setForm] = useState(BLANK);
   const [search, setSearch] = useState('');
 
-  const reload = () => setEmployees(getEmployees());
+  const reload = async () => {
+  try {
+    const data = await getEmployees();
+    setEmployees(data);
+  } catch (error) {
+    console.error('Error cargando empleados:', error);
+  }
+};
   useEffect(() => { reload(); }, []);
 
   const open = (emp=null) => { setForm(emp ? {...emp} : {...BLANK, id: Date.now().toString()}); setModal(true); };
   const close = () => setModal(false);
 
-  const save = () => {
+  const save = async () => {
     if(!form.name.trim()){ alert('El nombre es requerido'); return; }
-    saveEmployee(form);
-    reload();
+    await saveEmployee(form);
+await reload();
     close();
   };
 
-  const del = (id) => {
-    if(window.confirm('¿Eliminar este empleado?')){ deleteEmployee(id); reload(); }
+  const del = async (id) => {
+   if(window.confirm('¿Eliminar este empleado?')){
+  await deleteEmployee(id);
+  await reload();
   };
 
   const toggleRestriction = (val) => {
