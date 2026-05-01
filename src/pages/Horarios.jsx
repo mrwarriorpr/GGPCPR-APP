@@ -50,13 +50,33 @@ function formatShift12h(shift) {
   return `${convert(start)} - ${convert(end)}`;
 }
 
+function to24h(hour, min, ampm) {
+  if (!hour) return '';
+  let h = parseInt(hour, 10);
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2,'0')}:${min || '00'}`;
+}
 function checkConflict(emp, date, shift) {
   if(!emp) return null;
   const d = date instanceof Date ? date : new Date(date.split('/').reverse().join('-'));
   const dow = d.getDay();
   const r = emp.preferred_shifts || emp.restrictions || [];
-  const isNight = shift && (shift.includes('PM/') || (parseInt(shift)>=18) || shift.toLowerCase().includes('noche') || shift.startsWith('6:00PM') || shift.startsWith('7:00PM') || shift.startsWith('8:00PM') || shift.startsWith('10:00PM') || shift.startsWith('11:00PM'));
-  const isDay = !isNight;
+  const getStartHour = (shift) => {
+  if (!shift) return 0;
+  const start = shift.split('/')[0];
+
+  // Si viene en 24h → "08:00"
+  if (start.includes(':')) {
+    return parseInt(start.split(':')[0], 10);
+  }
+
+  return 0;
+};
+
+const startHour = getStartHour(shift);
+const isNight = startHour >= 18 || shift?.toLowerCase().includes('noche');
+const isDay = !isNight;
   if(r.includes('only_night') && isDay) return { type:'block', msg:`${emp.name} SOLO trabaja turno nocturno` };
   if(r.includes('only_day') && isNight) return { type:'block', msg:`${emp.name} SOLO trabaja turno diurno` };
   if(r.includes('no_weekend') && (dow===0||dow===6)) return { type:'warn', msg:`${emp.name} normalmente no trabaja fines de semana` };
@@ -160,6 +180,7 @@ await saveSchedule({
     await reload();
     setConflictInfo(null);
     setPendingAssign(null);
+    setModal(null);
   };
 
   const removeShift = async (empId, date) => {
@@ -186,7 +207,18 @@ if (src) {
 
   const openAssign = (empId, date) => {
     const post = posts.find(p=>p.id===selectedPost) || posts[0];
-    setModal({ empId, date, postId: post?.id||'', shift: post?.shifts?.[0]||'8:00AM/4:00PM' });
+    setModal({
+  empId,
+  date,
+  postId: post?.id || '',
+  shift: post?.shifts?.[0] || '08:00/16:00',
+  startHour: '8',
+  startMin: '00',
+  startAmpm: 'AM',
+  endHour: '4',
+  endMin: '00',
+  endAmpm: 'PM'
+});
   };
 
 const generateEmployeePDFs = async () => {
@@ -358,7 +390,7 @@ doc.setLineWidth(0.3);
   return [
     dateStr,
     DIAS_FULL[day.getDay()],
-    found ? ift12h(found.shift) : ''
+    found ? formatShift12h(found.shift) : ''
   ];
 }),
         theme: 'grid',
@@ -544,7 +576,7 @@ const filteredEmployees = selectedPost === 'all'
         onClick={()=>openAssign(emp.id,d)}
       >
         <div style={{ fontWeight:600, fontSize:9 }}>
-          {ift12h(s.shift)}
+          {formatShift12h(s.shift)}
         </div>
 
         <div style={{ color:'#6ee7b7', fontSize:8 }}>
@@ -668,10 +700,21 @@ const filteredEmployees = selectedPost === 'all'
 </div>
 
             <div style={{ display:'flex',gap:10 }}>
-              <button onClick={()=>{ assignShift(modal.empId,modal.date,modal.shift,modal.postId); setModal(null); }}
-                style={{ flex:1,padding:'10px',background:'#F5C518',color:'#000',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer' }}>
-                Asignar
-              </button>
+              <button onClick={() => {
+  if (!modal.startHour || !modal.endHour) {
+    alert('Debes completar la hora de entrada y salida.');
+    return;
+  }
+
+  const start = to24h(modal.startHour, modal.startMin, modal.startAmpm);
+  const end = to24h(modal.endHour, modal.endMin, modal.endAmpm);
+  const shift = `${start}/${end}`;
+
+  assignShift(modal.empId, modal.date, shift, modal.postId);
+}}
+  style={{ flex:1,padding:'10px',background:'#F5C518',color:'#000',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer' }}>
+  Asignar
+</button>
               <button onClick={()=>setModal(null)} style={{ flex:1,padding:'10px',background:'rgba(220,38,38,0.15)',color:'#f87171',border:'1px solid rgba(220,38,38,0.3)',borderRadius:8,cursor:'pointer',fontWeight:600 }}>
                 Cancelar
               </button>
