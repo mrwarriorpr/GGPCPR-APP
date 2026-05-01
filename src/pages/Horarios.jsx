@@ -290,25 +290,41 @@ doc.rect(198, 73, 6, 6, 'S');
 
       // TABLA 1
       autoTable(doc, {
-        startY: 95,
-        head: [['FECHA', 'DÍA', 'ENTRADA', 'TOMA DE\nALIMENTOS', 'SALIDA', 'TOTAL\nDE\nHORAS']],
-        body: scheds.map(s => [s.date, s.day, '', '', '', '']),
-        theme: 'grid',
-        styles: {
-  fontSize: 9,
-  halign: 'center',
-  valign: 'middle',
-  lineColor: [0, 0, 0],
-  lineWidth: 0.2,
-  textColor: [0, 0, 0],
-},
-headStyles: {
-  fillColor: [255, 255, 255],
-  textColor: [0, 0, 0],
-  fontStyle: 'bold',
-},
-      });
-
+  startY: 95,
+  head: [['FECHA', 'DÍA', 'ENTRADA', 'TOMA DE\nALIMENTOS', 'SALIDA', 'TOTAL\nDE\nHORAS']],
+  body: days.map(day => [
+    fmt(day),
+    DIAS_FULL[day.getDay()].toUpperCase(),
+    '',
+    '',
+    '',
+    ''
+  ]),
+  theme: 'grid',
+  styles: {
+    fontSize: 9,
+    halign: 'center',
+    valign: 'middle',
+    lineColor: [0, 0, 0],
+    lineWidth: 0.2,
+    textColor: [0, 0, 0],
+    minCellHeight: 8,
+  },
+  headStyles: {
+    fillColor: false,
+    textColor: [0, 0, 0],
+    fontStyle: 'bold',
+  },
+  columnStyles: {
+    0: { cellWidth: 25 },
+    1: { cellWidth: 35 },
+    2: { cellWidth: 30 },
+    3: { cellWidth: 40 },
+    4: { cellWidth: 30 },
+    5: { cellWidth: 25 },
+  },
+  margin: { left: 15, right: 15 },
+});
       const finalY = doc.lastAutoTable.finalY + 25;
 
 doc.setDrawColor(0, 0, 0);
@@ -335,17 +351,38 @@ doc.setLineWidth(0.3);
       autoTable(doc, {
         startY: 45,
         head: [['Fecha', 'Día', 'Turno']],
-        body: scheds.map(s => [
-          s.date,
-          s.day.charAt(0) + s.day.slice(1).toLowerCase(),
-          formatShift12h(s.shift)
-        ]),
+       body: days.map(day => {
+  const dateStr = fmt(day);
+  const found = scheds.find(s => s.date === dateStr);
+
+  return [
+    dateStr,
+    DIAS_FULL[day.getDay()],
+    found ? formatShift12h(found.shift) : ''
+  ];
+}),
         theme: 'grid',
-        styles: {
-          fontSize: 12,
-          halign: 'center',
-          valign: 'middle',
-        }
+       styles: {
+  fontSize: 12,
+  halign: 'center',
+  valign: 'middle',
+  lineColor: [0, 0, 0],
+  lineWidth: 0.2,
+  textColor: [0, 0, 0],
+  minCellHeight: 12,
+},
+headStyles: {
+  fillColor: false,
+  textColor: [0, 0, 0],
+  fontStyle: 'normal',
+  fontSize: 16,
+},
+columnStyles: {
+  0: { cellWidth: 55 },
+  1: { cellWidth: 55, fontStyle: 'bold', fontSize: 16 },
+  2: { cellWidth: 55 },
+},
+    margin: { left: 25, right: 25 },    
       });
 
       doc.setFontSize(9);
@@ -484,7 +521,7 @@ const filteredEmployees = selectedPost === 'all'
                 </td>
                 {days.map((d,i) => {
                   const daySchedules = getEmpSchedule(emp.id, d);
-const s = daySchedules[0];
+
                   const isToday = fmt(d)===fmt(new Date());
                   return (
                     <td key={i} style={{ padding:'3px', textAlign:'center', background: isToday?'rgba(245,197,24,0.03)':'transparent', borderLeft: i===7?'2px solid #333':'none' }}
