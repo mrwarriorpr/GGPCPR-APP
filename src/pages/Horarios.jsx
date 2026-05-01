@@ -358,7 +358,7 @@ doc.setLineWidth(0.3);
   return [
     dateStr,
     DIAS_FULL[day.getDay()],
-    found ? formatShift12h(found.shift) : ''
+    found ? ift12h(found.shift) : ''
   ];
 }),
         theme: 'grid',
@@ -544,7 +544,7 @@ const filteredEmployees = selectedPost === 'all'
         onClick={()=>openAssign(emp.id,d)}
       >
         <div style={{ fontWeight:600, fontSize:9 }}>
-          {formatShift12h(s.shift)}
+          {ift12h(s.shift)}
         </div>
 
         <div style={{ color:'#6ee7b7', fontSize:8 }}>
@@ -619,15 +619,53 @@ const filteredEmployees = selectedPost === 'all'
               {posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
 
-            <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Turno</label>
-            <select value={modal.shift} onChange={e=>setModal({...modal,shift:e.target.value})}
-              style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:16,boxSizing:'border-box' }}>
-              {(posts.find(p=>p.id===modal.postId)?.shifts || ['8:00AM/4:00PM','4:00PM/12:00AM','12:00AM/8:00AM']).map(s => (
-  <option key={s} value={s}>
-    {formatShift12h(s)}
-  </option>
-))}
-            </select>
+            {/* ENTRADA */}
+<label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Entrada</label>
+<div style={{ display:'flex', gap:6, marginBottom:10 }}>
+  <input type="number" min="1" max="12"
+    value={modal.startHour || ''}
+    onChange={e => setModal({ ...modal, startHour: e.target.value })}
+    style={{ width:'60px', padding:'8px' }}
+  />
+
+  <select value={modal.startMin || '00'}
+    onChange={e => setModal({ ...modal, startMin: e.target.value })}>
+    <option value="00">00</option>
+    <option value="15">15</option>
+    <option value="30">30</option>
+    <option value="45">45</option>
+  </select>
+
+  <select value={modal.startAmpm || 'AM'}
+    onChange={e => setModal({ ...modal, startAmpm: e.target.value })}>
+    <option>AM</option>
+    <option>PM</option>
+  </select>
+</div>
+
+{/* SALIDA */}
+<label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Salida</label>
+<div style={{ display:'flex', gap:6, marginBottom:16 }}>
+  <input type="number" min="1" max="12"
+    value={modal.endHour || ''}
+    onChange={e => setModal({ ...modal, endHour: e.target.value })}
+    style={{ width:'60px', padding:'8px' }}
+  />
+
+  <select value={modal.endMin || '00'}
+    onChange={e => setModal({ ...modal, endMin: e.target.value })}>
+    <option value="00">00</option>
+    <option value="15">15</option>
+    <option value="30">30</option>
+    <option value="45">45</option>
+  </select>
+
+  <select value={modal.endAmpm || 'PM'}
+    onChange={e => setModal({ ...modal, endAmpm: e.target.value })}>
+    <option>AM</option>
+    <option>PM</option>
+  </select>
+</div>
 
             <div style={{ display:'flex',gap:10 }}>
               <button onClick={()=>{ assignShift(modal.empId,modal.date,modal.shift,modal.postId); setModal(null); }}
