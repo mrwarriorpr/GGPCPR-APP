@@ -100,6 +100,7 @@ const loadImageAsBase64 = async (url) => {
 };
 
 export default function Horarios() {
+  const [specialShift, setSpecialShift] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeePDF, setSelectedEmployeePDF] = useState('all');
   const [selectedPostPDF, setSelectedPostPDF] = useState('all');
@@ -206,7 +207,10 @@ if (src) {
   };
 
   const openAssign = (empId, date) => {
-    const post = posts.find(p=>p.id===selectedPost) || posts[0];
+   const post = selectedPost === 'all'
+  ? posts[0]
+  : posts.find(p => String(p.id) === String(selectedPost)) || posts[0];
+    setSpecialShift(false);
     setModal({
   empId,
   date,
@@ -644,15 +648,48 @@ const filteredEmployees = selectedPost === 'all'
             </h3>
             <p style={{ color:'#888',fontSize:13,margin:'0 0 1rem' }}>{DIAS_FULL[modal.date.getDay()]}, {fmt(modal.date)}</p>
 
-            <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Puesto</label>
-            <select value={modal.postId} onChange={e=>setModal({...modal,postId:e.target.value,shift:posts.find(p=>p.id===e.target.value)?.shifts?.[0]||modal.shift})}
-              style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:12,boxSizing:'border-box' }}>
-              <option value="">Sin puesto específico</option>
-              {posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+           <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Puesto</label>
+<select
+  value={modal.postId}
+  onChange={e => {
+    const post = posts.find(p => String(p.id) === String(e.target.value));
+    setModal({
+      ...modal,
+      postId: e.target.value,
+      shift: post?.shifts?.[0] || '08:00/16:00'
+    });
+  }}
+  style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:12,boxSizing:'border-box' }}
+>
+  <option value="">Sin puesto específico</option>
+  {posts.map(p => (
+    <option key={p.id} value={p.id}>{p.name}</option>
+  ))}
+</select>
 
-            {/* ENTRADA */}
-<label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Entrada</label>
+<label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Turno</label>
+<select
+  value={modal.shift}
+  onChange={e => setModal({ ...modal, shift: e.target.value })}
+  style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:10,boxSizing:'border-box' }}
+>
+  {(posts.find(p => String(p.id) === String(modal.postId))?.shifts || ['08:00/16:00']).map(s => (
+  <option key={s} value={s}>{formatShift12h(s)}</option>
+))}
+</select>
+
+<button
+  type="button"
+  onClick={() => setSpecialShift(v => !v)}
+  style={{ marginBottom:12,padding:'6px 10px',background:'#222',color:'#F5C518',border:'1px solid #444',borderRadius:6,cursor:'pointer',fontSize:12 }}
+>
+  {specialShift ? 'Usar turno predeterminado' : 'Horario especial'}
+</button>
+
+{specialShift && (
+  <>
+    {/* ENTRADA */}
+    <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Entrada</label>
 <div style={{ display:'flex', gap:6, marginBottom:10 }}>
   <input type="number" min="1" max="12"
     value={modal.startHour || ''}
@@ -698,17 +735,18 @@ const filteredEmployees = selectedPost === 'all'
     <option>PM</option>
   </select>
 </div>
-
+  </>
+)}
             <div style={{ display:'flex',gap:10 }}>
               <button onClick={() => {
-  if (!modal.startHour || !modal.endHour) {
+  if (specialShift && (!modal.startHour || !modal.endHour)) {
     alert('Debes completar la hora de entrada y salida.');
     return;
   }
 
-  const start = to24h(modal.startHour, modal.startMin, modal.startAmpm);
-  const end = to24h(modal.endHour, modal.endMin, modal.endAmpm);
-  const shift = `${start}/${end}`;
+  const shift = specialShift
+    ? `${to24h(modal.startHour, modal.startMin, modal.startAmpm)}/${to24h(modal.endHour, modal.endMin, modal.endAmpm)}`
+    : modal.shift;
 
   assignShift(modal.empId, modal.date, shift, modal.postId);
 }}
