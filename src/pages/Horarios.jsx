@@ -622,7 +622,11 @@ const filteredEmployees = selectedPost === 'all'
             <label style={{ display:'block',color:'#888',fontSize:12,marginBottom:4 }}>Turno</label>
             <select value={modal.shift} onChange={e=>setModal({...modal,shift:e.target.value})}
               style={{ width:'100%',padding:'10px',background:'#0d0d0d',border:'1px solid #333',borderRadius:8,color:'#fff',fontSize:14,marginBottom:16,boxSizing:'border-box' }}>
-              {(posts.find(p=>p.id===modal.postId)?.shifts||['8:00AM/4:00PM','4:00PM/12:00AM','12:00AM/8:00AM']).map(s=><option key={s} value={s}>{s}</option>)}
+              {(posts.find(p=>p.id===modal.postId)?.shifts || ['8:00AM/4:00PM','4:00PM/12:00AM','12:00AM/8:00AM']).map(s => (
+  <option key={s} value={s}>
+    {formatShift12h(s)}
+  </option>
+))}
             </select>
 
             <div style={{ display:'flex',gap:10 }}>
