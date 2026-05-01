@@ -35,6 +35,26 @@ function to24h(hour, min, ampm) {
   if (ampm === 'AM' && h === 12) h = 0;
   return `${String(h).padStart(2,'0')}:${min || '00'}`;
 }
+function formatShift12h(shift) {
+  if (!shift) return '';
+
+  const [start, end] = shift.includes('/') ? shift.split('/') : shift.split('-');
+
+  const convert = (time) => {
+    if (!time) return '';
+    let [h, m] = time.split(':');
+    h = parseInt(h, 10);
+    m = m || '00';
+
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+
+    return `${h}${m === '00' ? '' : ':' + m} ${ampm}`;
+  };
+
+  return `${convert(start)} - ${convert(end)}`;
+}
+
 export default function Puestos() {
   const [posts, setPosts] = useState([]);
   const [modal, setModal] = useState(false);
@@ -230,7 +250,7 @@ const open = (post=null) => {
 {(form.shifts||[]).map((s,i) => (
   <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
     <span style={{ flex:1, color:'#93c5fd', fontSize:13 }}>
-      {s}
+{formatShift12h(s)}
     </span>
     <button
       type="button"
