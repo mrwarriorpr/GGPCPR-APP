@@ -16,6 +16,23 @@ function getBisemana(offset=0) {
 }
 
 function fmt(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+function formatShift12h(shift) {
+  if (!shift) return '';
+
+  const [start, end] = shift.split('/');
+
+  const convert = (time) => {
+    let [h, m] = time.split(':');
+    h = parseInt(h, 10);
+
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+
+    return `${h}${m === '00' ? '' : ':' + m} ${ampm}`;
+  };
+
+  return `${convert(start)} - ${convert(end)}`;
+}
 
 function checkConflict(emp, date, shift) {
   if(!emp) return null;
@@ -305,7 +322,7 @@ doc.setLineWidth(0.3);
         body: scheds.map(s => [
           s.date,
           s.day.charAt(0) + s.day.slice(1).toLowerCase(),
-          s.shift || ''
+          formatShift12h(s.shift)
         ]),
         theme: 'grid',
         styles: {
@@ -326,7 +343,14 @@ doc.setLineWidth(0.3);
   });
 };
 
-
+const filteredEmployees = selectedPost === 'all'
+  ? employees
+  : employees.filter(emp =>
+      schedules.some(s =>
+        String(s.employee_id || s.employeeId) === String(emp.id) &&
+        String(s.post_id || s.postId) === String(selectedPost)
+      )
+    );
   return (
     <div style={{ color:'#fff' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem', flexWrap:'wrap', gap:12 }}>
@@ -431,7 +455,7 @@ doc.setLineWidth(0.3);
             </tr>
           </thead>
           <tbody>
-            {employees.map(emp => (
+            {filteredEmployees.map(emp => (
               <tr key={emp.id} style={{ borderBottom:'1px solid #1a1a1a' }}
                 draggable onDragStart={()=>setDragEmp(emp.id)}>
                 <td style={{ padding:'8px 12px', fontSize:13, whiteSpace:'nowrap' }}>
@@ -467,7 +491,7 @@ const s = daySchedules[0];
         onClick={()=>openAssign(emp.id,d)}
       >
         <div style={{ fontWeight:600, fontSize:9 }}>
-          {s.shift.replace(':00','').replace('AM','a').replace('PM','p')}
+          {formatShift12h(s.shift)}
         </div>
 
         <div style={{ color:'#6ee7b7', fontSize:8 }}>
