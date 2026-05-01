@@ -2,7 +2,19 @@
 import { useState, useEffect } from 'react';
 import { getPosts, savePost, deletePost } from '../data/store';
 
-const BLANK = { name:'', location:'', address:'', shifts:['8:00AM/4:00PM'], armed:false, notes:'' };
+const BLANK = {
+  name:'',
+  location:'',
+  address:'',
+  shifts:['08:00/16:00'],
+  armed:false,
+  notes:'',
+
+  // NUEVO
+  coverage: '24/7', // '24/7', 'weekly', 'custom'
+  days: [1,2,3,4,5,6,0], // días activos
+  guardsPerShift: 1 // cuántos guardias necesita por turno
+};
 const S = {
   page: { color:'#fff' },
   header: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' },
@@ -34,10 +46,17 @@ export default function Puestos() {
 
 useEffect(() => { reload(); }, []);
 
-  const open = (post=null) => {
-    setForm(post ? {...post, shifts:[...(post.shifts||['8:00AM/4:00PM'])]} : {...BLANK, id: Date.now().toString()});
-    setModal(true);
-  };
+const open = (post=null) => {
+  setForm(post ? {
+    ...post,
+    shifts:[...(post.shifts || ['08:00/16:00'])],
+    coverage: post.coverage || '24/7',
+    days: post.days || [1,2,3,4,5,6,0],
+    guardsPerShift: post.guardsPerShift || 1
+  } : {...BLANK, id: Date.now().toString()});
+
+  setModal(true);
+};
   const close = () => setModal(false);
 
   const save = async () => {
@@ -117,19 +136,79 @@ useEffect(() => { reload(); }, []);
             <label style={S.label}>Dirección</label>
             <input style={S.input} value={form.address||''} onChange={e=>setForm({...form,address:e.target.value})} placeholder="Dirección completa" />
 
-            <label style={S.label}>Tipo</label>
-            <select style={S.input} value={form.armed?'armed':'unarmed'} onChange={e=>setForm({...form,armed:e.target.value==='armed'})}>
-              <option value="unarmed">Desarmado</option>
-              <option value="armed">Armado</option>
-            </select>
+       <label style={S.label}>Tipo</label>
+<select style={S.input} value={form.armed?'armed':'unarmed'} onChange={e=>setForm({...form,armed:e.target.value==='armed'})}>
+  <option value="unarmed">Desarmado</option>
+  <option value="armed">Armado</option>
+</select>
 
-            <label style={S.label}>Turnos disponibles</label>
-            {(form.shifts||[]).map((s,i) => (
-              <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
-                <span style={{ flex:1, color:'#93c5fd', fontSize:13 }}>{s}</span>
-                <button onClick={()=>removeShift(i)} style={{ background:'none', border:'none', color:'#f87171', cursor:'pointer', fontSize:16 }}>✕</button>
-              </div>
-            ))}
+<label style={S.label}>Cobertura del puesto</label>
+<select
+  style={S.input}
+  value={form.coverage || '24/7'}
+  onChange={e=>setForm({...form, coverage:e.target.value})}
+>
+  <option value="24/7">24/7 - todos los días</option>
+  <option value="weekly">Días específicos</option>
+</select>
+
+{form.coverage === 'weekly' && (
+  <>
+    <label style={S.label}>Días de trabajo</label>
+    <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+      {['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'].map((d,i)=>(
+        <button
+          type="button"
+          key={i}
+          onClick={()=>{
+            const exists = form.days?.includes(i);
+            setForm({
+              ...form,
+              days: exists
+                ? form.days.filter(x=>x!==i)
+                : [...(form.days || []), i]
+            });
+          }}
+          style={{
+            padding:'6px 10px',
+            borderRadius:6,
+            border:'1px solid #333',
+            background: form.days?.includes(i) ? '#F5C518' : '#0d0d0d',
+            color: form.days?.includes(i) ? '#000' : '#fff',
+            cursor:'pointer'
+          }}
+        >
+          {d}
+        </button>
+      ))}
+    </div>
+  </>
+)}
+
+<label style={S.label}>Guardias por turno</label>
+<input
+  type="number"
+  min="1"
+  style={S.input}
+  value={form.guardsPerShift || 1}
+  onChange={e=>setForm({...form, guardsPerShift:parseInt(e.target.value) || 1})}
+/>
+
+<label style={S.label}>Turnos disponibles</label>
+{(form.shifts||[]).map((s,i) => (
+  <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+    <span style={{ flex:1, color:'#93c5fd', fontSize:13 }}>
+      {s}
+    </span>
+    <button
+      type="button"
+      onClick={()=>removeShift(i)}
+      style={{ background:'none', border:'none', color:'#f87171', cursor:'pointer', fontSize:16 }}
+    >
+      ✕
+    </button>
+  </div>
+))}
             <div style={{ display:'flex', gap:8, marginTop:8 }}>
               <input style={{ ...S.input, flex:1 }} value={newShift} onChange={e=>setNewShift(e.target.value)}
                 placeholder="Ej. 8:00AM/5:00PM" onKeyDown={e=>e.key==='Enter'&&addShift()} />
