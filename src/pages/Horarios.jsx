@@ -19,11 +19,27 @@ function fmt(d){ return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMo
 function formatShift12h(shift) {
   if (!shift) return '';
 
-  const [start, end] = shift.split('/');
+  if (shift.includes('AM') || shift.includes('PM')) {
+    return shift.replace('/', ' - ');
+  }
+
+  let start = '';
+  let end = '';
+
+  if (shift.includes('/')) {
+    [start, end] = shift.split('/');
+  } else if (shift.includes('-')) {
+    [start, end] = shift.split('-');
+  } else {
+    return shift;
+  }
 
   const convert = (time) => {
+    if (!time) return '';
+
     let [h, m] = time.split(':');
     h = parseInt(h, 10);
+    m = m || '00';
 
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
@@ -455,7 +471,7 @@ const filteredEmployees = selectedPost === 'all'
             </tr>
           </thead>
           <tbody>
-            {employees.map(emp => (
+            {filteredEmployees.map(emp => (
               <tr key={emp.id} style={{ borderBottom:'1px solid #1a1a1a' }}
                 draggable onDragStart={()=>setDragEmp(emp.id)}>
                 <td style={{ padding:'8px 12px', fontSize:13, whiteSpace:'nowrap' }}>
