@@ -455,7 +455,7 @@ const filteredEmployees = selectedPost === 'all'
             </tr>
           </thead>
           <tbody>
-            {filteredEmployees.map(emp => (
+            {employees.map(emp => (
               <tr key={emp.id} style={{ borderBottom:'1px solid #1a1a1a' }}
                 draggable onDragStart={()=>setDragEmp(emp.id)}>
                 <td style={{ padding:'8px 12px', fontSize:13, whiteSpace:'nowrap' }}>
