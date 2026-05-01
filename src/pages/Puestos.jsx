@@ -158,7 +158,9 @@ const open = (post=null) => {
               <div style={{ color:'#666', fontSize:11, marginBottom:4 }}>TURNOS:</div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {(post.shifts||[]).map((s,i) => (
-                  <span key={i} style={{ background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:4, padding:'2px 8px', fontSize:12, color:'#93c5fd' }}>{s}</span>
+                  <span key={i} style={{ background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)', borderRadius:4, padding:'2px 8px', fontSize:12, color:'#93c5fd' }}>
+  {formatShift12h(s)}
+</span>
                 ))}
               </div>
             </div>
