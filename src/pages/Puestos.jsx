@@ -28,13 +28,25 @@ const S = {
   label: { display:'block', color:'#888', fontSize:12, marginBottom:4, marginTop:16 },
   input: { width:'100%', padding:'10px 12px', background:'#0d0d0d', border:'1px solid #333', borderRadius:8, color:'#fff', fontSize:14, boxSizing:'border-box' },
 };
-
+function to24h(hour, min, ampm) {
+  if (!hour) return '';
+  let h = parseInt(hour, 10);
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2,'0')}:${min || '00'}`;
+}
 export default function Puestos() {
   const [posts, setPosts] = useState([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(BLANK);
-  const [newShift, setNewShift] = useState('');
-
+const [shiftForm, setShiftForm] = useState({
+  startHour:'8',
+  startMin:'00',
+  startAmpm:'AM',
+  endHour:'4',
+  endMin:'00',
+  endAmpm:'PM'
+});
   const reload = async () => {
   try {
     const data = await getPosts();
@@ -49,11 +61,14 @@ useEffect(() => { reload(); }, []);
 const open = (post=null) => {
   setForm(post ? {
     ...post,
-    shifts:[...(post.shifts || ['08:00/16:00'])],
+    shifts: [...(post.shifts || ['08:00/16:00'])],
     coverage: post.coverage || '24/7',
     days: post.days || [1,2,3,4,5,6,0],
     guardsPerShift: post.guardsPerShift || 1
-  } : {...BLANK, id: Date.now().toString()});
+  } : {
+    ...BLANK,
+    id: Date.now().toString()
+  });
 
   setModal(true);
 };
@@ -74,8 +89,25 @@ const open = (post=null) => {
   };
 
   const addShift = () => {
-    if(newShift.trim()){ setForm(f=>({...f,shifts:[...(f.shifts||[]),newShift.trim()]})); setNewShift(''); }
-  };
+  const start = to24h(shiftForm.startHour, shiftForm.startMin, shiftForm.startAmpm);
+  const end = to24h(shiftForm.endHour, shiftForm.endMin, shiftForm.endAmpm);
+  const shift = `${start}/${end}`;
+
+  if (!start || !end) {
+    alert('Debes completar la hora de entrada y salida.');
+    return;
+  }
+
+  if ((form.shifts || []).includes(shift)) {
+    alert('Ese turno ya existe.');
+    return;
+  }
+
+  setForm(f => ({
+    ...f,
+    shifts: [...(f.shifts || []), shift]
+  }));
+};
 
   const removeShift = (idx) => setForm(f=>({...f,shifts:f.shifts.filter((_,i)=>i!==idx)}));
 
@@ -209,17 +241,51 @@ const open = (post=null) => {
     </button>
   </div>
 ))}
-            <div style={{ display:'flex', gap:8, marginTop:8 }}>
-              <input style={{ ...S.input, flex:1 }} value={newShift} onChange={e=>setNewShift(e.target.value)}
-                placeholder="Ej. 8:00AM/5:00PM" onKeyDown={e=>e.key==='Enter'&&addShift()} />
-              <button onClick={addShift} style={{ ...S.btn, padding:'10px 16px', flexShrink:0 }}>+</button>
-            </div>
+            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+  <input type="number" min="1" max="12" value={shiftForm.startHour}
+    onChange={e=>setShiftForm({...shiftForm,startHour:e.target.value})}
+    style={{ ...S.input, width:60 }} />
+
+  <select value={shiftForm.startMin} onChange={e=>setShiftForm({...shiftForm,startMin:e.target.value})} style={{ ...S.input, width:75 }}>
+    <option value="00">00</option>
+    <option value="15">15</option>
+    <option value="30">30</option>
+    <option value="45">45</option>
+  </select>
+
+  <select value={shiftForm.startAmpm} onChange={e=>setShiftForm({...shiftForm,startAmpm:e.target.value})} style={{ ...S.input, width:80 }}>
+    <option>AM</option>
+    <option>PM</option>
+  </select>
+
+  <span style={{ color:'#888', alignSelf:'center' }}>a</span>
+
+  <input type="number" min="1" max="12" value={shiftForm.endHour}
+    onChange={e=>setShiftForm({...shiftForm,endHour:e.target.value})}
+    style={{ ...S.input, width:60 }} />
+
+  <select value={shiftForm.endMin} onChange={e=>setShiftForm({...shiftForm,endMin:e.target.value})} style={{ ...S.input, width:75 }}>
+    <option value="00">00</option>
+    <option value="15">15</option>
+    <option value="30">30</option>
+    <option value="45">45</option>
+  </select>
+
+  <select value={shiftForm.endAmpm} onChange={e=>setShiftForm({...shiftForm,endAmpm:e.target.value})} style={{ ...S.input, width:80 }}>
+    <option>AM</option>
+    <option>PM</option>
+  </select>
+
+  <button type="button" onClick={addShift} style={{ ...S.btn, padding:'10px 16px' }}>+</button>
+</div>
 
             <label style={S.label}>Notas</label>
             <textarea style={{ ...S.input, height:80, resize:'vertical' }} value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} />
 
             <div style={{ display:'flex', gap:10, marginTop:20 }}>
-              <button style={{ ...S.btn, flex:1 }} onClick={save}>Guardar</button>
+              <button type="button" style={{ ...S.btn, flex:1 }} onClick={save}>
+  Guardar
+</button>
               <button style={{ background:'rgba(220,38,38,0.15)', color:'#f87171', border:'1px solid rgba(220,38,38,0.3)', borderRadius:8, padding:'10px', flex:1, cursor:'pointer', fontWeight:600 }} onClick={close}>Cancelar</button>
             </div>
           </div>
