@@ -17,7 +17,7 @@ export default function Citas() {
                 const appts = await getAppointments();
                 const emps = await getEmployees();
                 setAppointments(Array.isArray(appts) ? appts : []);
-                setEmployees(Array.isArray(emps) ? emps.filter(e => e.status === 'active') : []);
+                setEmployees(Array.isArray(emps) ? emps : []);
         } catch (error) {
                 console.error('Error cargando citas:', error);
                 setAppointments([]);
