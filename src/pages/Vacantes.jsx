@@ -1,6 +1,6 @@
 // src/pages/Vacantes.jsx
 import { useState, useEffect } from 'react';
-import { getSchedules, saveSchedule, getEmployees, getPosts, getAppointments } from '../data/store';
+import { getSchedules, saveSchedule, deleteSchedule, getEmployees, getPosts, getAppointments } from '../data/store';
 
 function fmt(d) {
   if (typeof d === 'string') return d;
@@ -94,7 +94,8 @@ export default function Vacantes() {
   const [employees, setEmployees] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [selectedVacancy, setSelectedVacancy] = useState(null);
-  const [loading, setLoading] = useState(true);
+const [specialChange, setSpecialChange] = useState(null);
+const [loading, setLoading] = useState(true);
   const days = getBisemana();
 
   const reload = async () => {
@@ -215,6 +216,35 @@ const getAvailable = (vacancy) => {
   return { recommended, available, limited };
 };
 
+const openSpecialChange = (vacancy, emp) => {
+  const empShift = schedules.find(s =>
+    String(s.employee_id || s.employeeId) === String(emp.id) &&
+    s.date === vacancy.date &&
+    overlap(normalizeShift(s.shift), normalizeShift(vacancy.shift))
+  );
+
+  const replacementVacancy = empShift
+    ? {
+        key: `replacement_${empShift.id}`,
+        post: {
+          id: empShift.post_id || empShift.postId,
+          name: empShift.post_name || empShift.postName,
+        },
+        date: empShift.date,
+        shift: empShift.shift,
+        guardsNeeded: 1,
+        guardsAssigned: 0,
+      }
+    : null;
+
+  setSpecialChange({
+    vacancy,
+    emp,
+    empShift,
+    replacementVacancy,
+  });
+};
+  
  const handleAssign = async (vacancy, emp) => {
   const turnosHoy = schedules.filter(s =>
     String(s.employee_id || s.employeeId) === String(emp.id) &&
@@ -351,28 +381,44 @@ if (recommended.length === 0 && available.length === 0 && limited.length === 0) 
     </div>
 
     <div style={{ flex: 1 }}>
-  <div style={{ fontWeight: 600 }}>{emp.name}</div>
+      <div style={{ fontWeight: 600 }}>{emp.name}</div>
 
-  <div style={{ fontSize: 11, color: '#888' }}>
-    Último: {lastShift}
-  </div>
+      <div style={{ fontSize: 11, color: '#888' }}>
+        Último: {lastShift}
+      </div>
 
-  <div style={{ fontSize: 11, color: '#888' }}>
-    Próximo: {nextShift}
-  </div>
-</div>
+      <div style={{ fontSize: 11, color: '#888' }}>
+        Próximo: {nextShift}
+      </div>
+    </div>
 
-    <button onClick={() => handleAssign(selectedVacancy, emp)}
-      style={{
-        padding: '7px 14px',
-        borderRadius: 7,
-        background: '#F5C518',
-        color: '#000',
-        fontWeight: 700,
-        cursor: 'pointer'
-      }}>
-      Asignar
-    </button>
+    {/* BOTONES */}
+    <div style={{ display: 'flex', gap: 6 }}>
+      <button onClick={() => handleAssign(selectedVacancy, emp)}
+        style={{
+          padding: '7px 14px',
+          borderRadius: 7,
+          background: '#F5C518',
+          color: '#000',
+          fontWeight: 700,
+          cursor: 'pointer'
+        }}>
+        Asignar
+      </button>
+
+      <button onClick={() => openSpecialChange(selectedVacancy, emp)}
+        style={{
+          padding: '7px 14px',
+          borderRadius: 7,
+          background: '#fbbf24',
+          color: '#000',
+          fontWeight: 700,
+          cursor: 'pointer',
+          border: 'none'
+        }}>
+        Cambio especial
+      </button>
+    </div>
   </div>
 ))}
         
@@ -478,6 +524,114 @@ if (recommended.length === 0 && available.length === 0 && limited.length === 0) 
           )}
         </div>
       )}
+
+{specialChange && (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    background: 'rgba(0,0,0,0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999
+  }}>
+    <div style={{
+      background: '#1a1a1a',
+      padding: 24,
+      borderRadius: 12,
+      width: 400
+    }}>
+      <h3 style={{ color: '#F5C518' }}>Cambio especial</h3>
+
+      <p>
+        {specialChange.emp.name} será movido a:
+        <br />
+        <strong>
+          {formatShift12h(specialChange.vacancy.shift)} en {specialChange.vacancy.post.name}
+        </strong>
+      </p>
+
+     {specialChange.empShift ? (
+  <>
+    <p style={{ color: '#f87171' }}>
+      ⚠️ Dejará vacante:
+      <br />
+      {formatShift12h(specialChange.empShift.shift)} en {specialChange.empShift.post_name}
+    </p>
+
+    {specialChange.replacementVacancy && (
+      <div style={{ marginTop: 15 }}>
+        <div style={{ color: '#F5C518', fontSize: 12, fontWeight: 700 }}>
+          Sugerencias para cubrir ese turno:
+        </div>
+
+        {getAvailable(specialChange.replacementVacancy).recommended.slice(0,3).map(({ emp }) => (
+          <div key={emp.id} style={{
+            fontSize: 12,
+            marginTop: 6,
+            color: '#34d399'
+          }}>
+            • {emp.name}
+          </div>
+        ))}
+      </div>
+    )}
+  </>
+) : (
+  <p style={{ color: '#34d399' }}>
+    ✔ Este empleado está libre ese día.
+  </p>
+)}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button
+          onClick={async () => {
+            if (specialChange.empShift) {
+              await deleteSchedule(specialChange.empShift.id);
+            }
+
+            await saveSchedule({
+              id: Date.now().toString(),
+              employee_id: specialChange.emp.id,
+              post_id: specialChange.vacancy.post.id,
+              post_name: specialChange.vacancy.post.name,
+              date: specialChange.vacancy.date,
+              shift: normalizeShift(specialChange.vacancy.shift)
+            });
+
+            setSpecialChange(null);
+            await reload();
+          }}
+          style={{
+            flex: 1,
+            background: '#34d399',
+            padding: 10,
+            borderRadius: 6,
+            fontWeight: 700
+          }}
+        >
+          Confirmar
+        </button>
+
+        <button
+          onClick={() => setSpecialChange(null)}
+          style={{
+            flex: 1,
+            background: '#444',
+            padding: 10,
+            borderRadius: 6
+          }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+      
     </div>
   );
 }
