@@ -82,7 +82,8 @@ export default function Vacantes() {
   const vacancies = [];
   posts.forEach(post => {
     const shifts = post.shifts || [];
-    const guardsNeeded = post.guards_per_shift || post.guardsPerShift || 1;
+   const guardsNeeded =
+  Number(post.required_guards || post.guards_per_shift || post.guardsPerShift || 1);
     const coverage = post.coverage || '24/7';
     const activeDays = post.days || [0,1,2,3,4,5,6];
     days.forEach(day => {
@@ -93,7 +94,7 @@ export default function Vacantes() {
         const assigned = schedules.filter(s => {
           const sPostId = s.post_id || s.postId;
           return String(sPostId) === String(post.id) &&
-  s.date === dateStr &&
+  String(s.date).trim() === String(dateStr).trim() &&
   normalizeShift(s.shift) === normalizeShift(shift);
         });
         const missing = guardsNeeded - assigned.length;
