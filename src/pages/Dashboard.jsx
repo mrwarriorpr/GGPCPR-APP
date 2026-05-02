@@ -63,11 +63,12 @@ export default function Dashboard() {
   }, []);
 
   const schedMap = {};
-    schedules.forEach(s => {
-          const empId = s.employee_id || s.employeeId;
-          const key = empId + '_' + s.date;
-          schedMap[key] = s;
-    });
+schedules.forEach(s => {
+  const empId = s.employee_id || s.employeeId;
+  const key = empId + '_' + s.date;
+  if (!schedMap[key]) schedMap[key] = [];
+  schedMap[key].push(s);
+});
 
   const postMap = {};
     posts.forEach(p => { postMap[p.id] = p; });
