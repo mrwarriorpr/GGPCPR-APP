@@ -465,7 +465,6 @@ if (recommended.length === 0 && available.length === 0 && limited.length === 0) 
 <div style={{ fontSize: 11, color: '#f87171' }}>
   {reason}
 </div>
-                </div>
               </div>
             ))}
           </>
