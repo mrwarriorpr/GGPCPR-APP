@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { getAppointments, addAppointment, deleteAppointment, getEmployees } from '../data/store';
 
 const APPT_TYPES = ['Medica', 'Dental', 'Legal', 'Personal', 'Vacaciones', 'Otro'];
-const EMPTY_FORM = { employeeId: '', date: '', type: 'Medica', notes: '' };
+const EMPTY_FORM = { employeeId: '', date: '', dateEnd: '', type: 'Medica', notes: '' };
 
 export default function Citas() {
   const [appointments, setAppointments] = useState([]);
@@ -33,12 +33,16 @@ export default function Citas() {
       return;
     }
     try {
-      await addAppointment({
-        employee_id: parseInt(form.employeeId),
-        date: form.date,
-        type: form.type,
-        notes: form.notes || null,
-      });
+      const start = new Date(form.date + 'T12:00:00');
+const end = form.dateEnd ? new Date(form.dateEnd + 'T12:00:00') : start;
+for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  await addAppointment({
+    employee_id: parseInt(form.employeeId),
+    date: new Date(d).toISOString().split('T')[0],
+    type: form.type,
+    notes: form.notes || null,
+  });
+}
       await reload();
       setShowModal(false);
       setForm(EMPTY_FORM);
@@ -133,7 +137,9 @@ export default function Citas() {
               {employees.map(e => <option key={e.id} value={String(e.id)}>{e.name}</option>)}
             </select>
             <label style={{ display:'block', fontSize:12, color:'#888', marginBottom:4, marginTop:14 }}>Fecha *</label>
-            <input style={iStyle} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+           <input style={iStyle} type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+<label style={{ display:'block', fontSize:12, color:'#888', marginBottom:4, marginTop:14 }}>Fecha fin (opcional — para vacaciones)</label>
+<input style={iStyle} type="date" value={form.dateEnd} min={form.date} onChange={e => setForm(f => ({ ...f, dateEnd: e.target.value }))} />
             <label style={{ display:'block', fontSize:12, color:'#888', marginBottom:4, marginTop:14 }}>Tipo</label>
             <select style={iStyle} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
               {APPT_TYPES.map(t => <option key={t}>{t}</option>)}
