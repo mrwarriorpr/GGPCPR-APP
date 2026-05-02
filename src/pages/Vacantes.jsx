@@ -34,6 +34,8 @@ function formatShift12h(shift) {
 function normalizeShift(shift) {
   if (!shift) return '';
 
+
+
   let clean = shift
     .toString()
     .trim()
@@ -60,7 +62,32 @@ function normalizeShift(shift) {
 
   return `${to24(parts[0])}/${to24(parts[1])}`;
 }
+function overlap(shiftA, shiftB) {
+  const parseShift = (shift) => {
+    const normalized = normalizeShift(shift);
+    const parts = normalized.includes('/') ? normalized.split('/') : normalized.split('-');
 
+    const toMin = (t) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + (m || 0);
+    };
+
+    let start = toMin(parts[0]);
+    let end = toMin(parts[1]);
+
+    if (end <= start) end += 1440;
+
+    return { start, end };
+  };
+
+  const a = parseShift(shiftA);
+  const b = parseShift(shiftB);
+
+  const overlapsSameDay = Math.max(a.start, b.start) < Math.min(a.end, b.end);
+  const overlapsNextDay = Math.max(a.start, b.start + 1440) < Math.min(a.end, b.end + 1440);
+
+  return overlapsSameDay || overlapsNextDay;
+}
 export default function Vacantes() {
   const [posts, setPosts] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -91,12 +118,13 @@ export default function Vacantes() {
       const dateStr = fmt(day);
       if (coverage === 'weekly' && !activeDays.includes(dow)) return;
       shifts.forEach(shift => {
-        const assigned = schedules.filter(s => {
-          const sPostId = s.post_id || s.postId;
-          return String(sPostId) === String(post.id) &&
-  String(s.date).trim() === String(dateStr).trim() &&
-  normalizeShift(s.shift) === normalizeShift(shift);
-        });
+       const assigned = schedules.filter(s => {
+  const sPostId = s.post_id || s.postId;
+
+  return String(sPostId) === String(post.id) &&
+    String(s.date).trim() === String(dateStr).trim() &&
+    overlap(s.shift, shift);
+});
         const missing = guardsNeeded - assigned.length;
         if (missing > 0) {
           for (let i = 0; i < missing; i++) {
@@ -112,7 +140,7 @@ export default function Vacantes() {
       const alreadyAssigned = schedules.some(s =>
         String(s.employee_id || s.employeeId) === String(emp.id) &&
 s.date === vacancy.date &&
-normalizeShift(s.shift) === normalizeShift(vacancy.shift)
+overlap(s.shift, vacancy.shift)
       );
       if (alreadyAssigned) return false;
       const hasCita = appointments.some(a =>
