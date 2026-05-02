@@ -31,6 +31,36 @@ function formatShift12h(shift) {
   return `${convert(start)} - ${convert(end)}`;
 }
 
+function normalizeShift(shift) {
+  if (!shift) return '';
+
+  let clean = shift
+    .toString()
+    .trim()
+    .replace(/\s+/g, '')
+    .replace('-', '/')
+    .toUpperCase();
+
+  const to24 = (time) => {
+    const match = time.match(/^(\d{1,2})(?::(\d{2}))?(AM|PM)?$/);
+    if (!match) return time;
+
+    let h = parseInt(match[1], 10);
+    const m = match[2] || '00';
+    const ampm = match[3];
+
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+
+    return `${String(h).padStart(2, '0')}:${m}`;
+  };
+
+  const parts = clean.split('/');
+  if (parts.length !== 2) return clean;
+
+  return `${to24(parts[0])}/${to24(parts[1])}`;
+}
+
 export default function Vacantes() {
   const [posts, setPosts] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -62,7 +92,9 @@ export default function Vacantes() {
       shifts.forEach(shift => {
         const assigned = schedules.filter(s => {
           const sPostId = s.post_id || s.postId;
-          return String(sPostId) === String(post.id) && s.date === dateStr && s.shift === shift;
+          return String(sPostId) === String(post.id) &&
+  s.date === dateStr &&
+  normalizeShift(s.shift) === normalizeShift(shift);
         });
         const missing = guardsNeeded - assigned.length;
         if (missing > 0) {
@@ -77,7 +109,9 @@ export default function Vacantes() {
   const getAvailable = (vacancy) => {
     return employees.filter(emp => {
       const alreadyAssigned = schedules.some(s =>
-        String(s.employee_id || s.employeeId) === String(emp.id) && s.date === vacancy.date && s.shift === vacancy.shift
+        String(s.employee_id || s.employeeId) === String(emp.id) &&
+s.date === vacancy.date &&
+normalizeShift(s.shift) === normalizeShift(vacancy.shift)
       );
       if (alreadyAssigned) return false;
       const hasCita = appointments.some(a =>
@@ -120,7 +154,7 @@ export default function Vacantes() {
     post_id: vacancy.post.id,
     post_name: vacancy.post.name,
     date: vacancy.date,
-    shift: vacancy.shift
+    shift: normalizeShift(vacancy.shift)
   });
   setSelectedVacancy(null);
   await reload();
