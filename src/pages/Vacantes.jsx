@@ -88,11 +88,43 @@ export default function Vacantes() {
     });
   };
 
-  const handleAssign = async (vacancy, emp) => {
-    await saveSchedule({ id: Date.now().toString(), employee_id: emp.id, post_id: vacancy.post.id, post_name: vacancy.post.name, date: vacancy.date, shift: vacancy.shift });
-    setSelectedVacancy(null);
-    await reload();
-  };
+ const handleAssign = async (vacancy, emp) => {
+  const turnosHoy = schedules.filter(s =>
+    String(s.employee_id || s.employeeId) === String(emp.id) &&
+    s.date === vacancy.date
+  );
+  if (turnosHoy.length > 0) {
+    const calcHours = (shift) => {
+      if (!shift) return 0;
+      const parts = shift.includes('/') ? shift.split('/') : shift.split('-');
+      if (parts.length < 2) return 0;
+      const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+      let diff = toMin(parts[1]) - toMin(parts[0]);
+      if (diff < 0) diff += 24 * 60;
+      return diff / 60;
+    };
+    const horasExistentes = turnosHoy.reduce((acc, s) => acc + calcHours(s.shift), 0);
+    const horasNuevas = calcHours(vacancy.shift);
+    const totalHoras = horasExistentes + horasNuevas;
+    if (totalHoras >= 12) {
+      const ok = window.confirm(`⚠️ AVISO: ${emp.name} va a trabajar ${totalHoras} horas este día.\nTurno existente + este turno = ${totalHoras}h.\n\n¿Confirmar turno extendido de ${totalHoras} horas?`);
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(`${emp.name} ya tiene un turno asignado el ${vacancy.date}.\nTotal con este turno: ${totalHoras}h.\n\n¿Agregar turno adicional?`);
+      if (!ok) return;
+    }
+  }
+  await saveSchedule({
+    id: Date.now().toString(),
+    employee_id: emp.id,
+    post_id: vacancy.post.id,
+    post_name: vacancy.post.name,
+    date: vacancy.date,
+    shift: vacancy.shift
+  });
+  setSelectedVacancy(null);
+  await reload();
+};
 
   const grouped = {};
   vacancies.forEach(v => { if (!grouped[v.post.name]) grouped[v.post.name] = []; grouped[v.post.name].push(v); });
