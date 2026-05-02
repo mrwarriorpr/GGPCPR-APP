@@ -118,12 +118,12 @@ export default function Vacantes() {
       const dateStr = fmt(day);
       if (coverage === 'weekly' && !activeDays.includes(dow)) return;
       shifts.forEach(shift => {
-       const assigned = schedules.filter(s => {
+      const assigned = schedules.filter(s => {
   const sPostId = s.post_id || s.postId;
 
   return String(sPostId) === String(post.id) &&
     String(s.date).trim() === String(dateStr).trim() &&
-    overlap(s.shift, shift);
+    overlap(normalizeShift(s.shift), normalizeShift(shift));
 });
         const missing = guardsNeeded - assigned.length;
         if (missing > 0) {
@@ -135,21 +135,46 @@ export default function Vacantes() {
     });
   });
 
-  const getAvailable = (vacancy) => {
-    return employees.filter(emp => {
-      const alreadyAssigned = schedules.some(s =>
-        String(s.employee_id || s.employeeId) === String(emp.id) &&
-s.date === vacancy.date &&
-overlap(s.shift, vacancy.shift)
-      );
-      if (alreadyAssigned) return false;
-      const hasCita = appointments.some(a =>
-        String(a.employee_id || a.employeeId) === String(emp.id) && a.date === vacancy.date
-      );
-      if (hasCita) return false;
-      return true;
-    });
-  };
+const getAvailable = (vacancy) => {
+  const available = [];
+  const limited = [];
+
+  employees.forEach(emp => {
+    const empSchedules = schedules.filter(s =>
+      String(s.employee_id || s.employeeId) === String(emp.id) &&
+      s.date === vacancy.date
+    );
+
+    const hasCita = appointments.some(a =>
+      String(a.employee_id || a.employeeId) === String(emp.id) &&
+      a.date === vacancy.date
+    );
+
+    if (hasCita) {
+      limited.push({ emp, reason: 'Tiene cita ese día' });
+      return;
+    }
+
+    let conflict = false;
+    let reason = '';
+
+    for (let s of empSchedules) {
+      if (overlap(normalizeShift(s.shift), normalizeShift(vacancy.shift))) {
+        conflict = true;
+        reason = `Trabaja ${formatShift12h(s.shift)} en ${s.post_name}`;
+        break;
+      }
+    }
+
+    if (conflict) {
+      limited.push({ emp, reason });
+    } else {
+      available.push(emp);
+    }
+  });
+
+  return { available, limited };
+};
 
  const handleAssign = async (vacancy, emp) => {
   const turnosHoy = schedules.filter(s =>
@@ -246,30 +271,90 @@ overlap(s.shift, vacancy.shift)
                   </div>
                   <button onClick={() => setSelectedVacancy(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', fontSize: 16 }}>×</button>
                 </div>
-                <div style={{ padding: '12px 0' }}>
-                  {getAvailable(selectedVacancy).length === 0 ? (
-                    <div style={{ padding: '24px', textAlign: 'center', color: '#888' }}>
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>😔</div>
-                      No hay empleados disponibles para este turno.
-                    </div>
-                  ) : (
-                    getAvailable(selectedVacancy).map(emp => (
-                      <div key={emp.id} style={{ padding: '12px 20px', borderBottom: '1px solid #222', display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#F5C518' }}>
-                          {emp.name.split(' ').map(n => n[0]).join('').slice(0,2)}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, color: '#fff', fontSize: 14 }}>{emp.name}</div>
-                          <div style={{ fontSize: 11, color: '#888' }}>{emp.type === 'full-time' ? 'Full-Time' : 'Part-Time'} · {emp.badge}</div>
-                        </div>
-                        <button onClick={() => handleAssign(selectedVacancy, emp)}
-                          style={{ padding: '7px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, background: 'rgba(52,211,153,0.15)', color: '#34d399', border: '1px solid rgba(52,211,153,0.3)', cursor: 'pointer' }}>
-                          Asignar
-                        </button>
-                      </div>
-                    ))
-                  )}
+               <div style={{ padding: '12px 0' }}>
+  {(() => {
+    const { available, limited } = getAvailable(selectedVacancy);
+
+    if (available.length === 0 && limited.length === 0) {
+      return (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#888' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>😔</div>
+          No hay empleados disponibles para este turno.
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {/* 🟢 DISPONIBLES */}
+        {available.map(emp => (
+          <div key={emp.id} style={{
+            padding: '12px 20px',
+            borderBottom: '1px solid #222',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: '#2a2a2a',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, color: '#34d399'
+            }}>
+              {emp.name.split(' ').map(n => n[0]).join('').slice(0,2)}
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>{emp.name}</div>
+              <div style={{ fontSize: 11, color: '#888' }}>
+                {emp.type === 'full-time' ? 'Full-Time' : 'Part-Time'}
+              </div>
+            </div>
+
+            <button onClick={() => handleAssign(selectedVacancy, emp)}
+              style={{
+                padding: '7px 14px',
+                borderRadius: 7,
+                background: '#34d399',
+                color: '#000',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}>
+              Asignar
+            </button>
+          </div>
+        ))}
+
+        {/* 🟡 CONFLICTOS */}
+        {limited.length > 0 && (
+          <>
+            <div style={{
+              padding: '10px 20px',
+              color: '#fbbf24',
+              fontSize: 12,
+              fontWeight: 700
+            }}>
+              ⚠️ Con conflictos / limitaciones
+            </div>
+
+            {limited.map(({ emp, reason }) => (
+              <div key={emp.id} style={{
+                padding: '12px 20px',
+                borderBottom: '1px solid #222',
+                opacity: 0.6
+              }}>
+                <div style={{ fontWeight: 600 }}>{emp.name}</div>
+                <div style={{ fontSize: 11, color: '#f87171' }}>
+                  {reason}
                 </div>
+              </div>
+            ))}
+          </>
+        )}
+      </>
+    );
+  })()}
+</div>    {/* padding */}
               </div>
             </div>
           )}
