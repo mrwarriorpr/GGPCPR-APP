@@ -110,6 +110,7 @@ export default function Horarios() {
   const [selectedPost, setSelectedPost] = useState('all');
   const [dragEmp, setDragEmp] = useState(null);
   const [modal, setModal] = useState(null);
+ const [noPuedeCubrir, setNoPuedeCubrir] = useState(null);
 
   const [conflictInfo, setConflictInfo] = useState(null);
   const [pendingAssign, setPendingAssign] = useState(null);
@@ -183,17 +184,23 @@ await saveSchedule({
     setPendingAssign(null);
     setModal(null);
   };
-
-  const removeShift = async (empId, date) => {
-    const dateStr = fmt(date);
-    const list = schedMap[empId+'_'+dateStr] || [];
-const s = list[0];
-
-if (s) {
-  await deleteSchedule(s.id);
-  await reload();
-}
+const openNoPuedeCubrir = (schedule) => {
+  const vacancy = {
+    post: {
+      id: schedule.post_id || schedule.postId,
+      name: schedule.post_name || posts.find(p => String(p.id) === String(schedule.post_id || schedule.postId))?.name
+    },
+    date: schedule.date,
+    shift: schedule.shift
   };
+
+  setNoPuedeCubrir({
+    schedule,
+    vacancy
+  });
+};
+  const removeShift = async (empId, date) => {
+
 
   const onDrop = (empId, date) => {
     if(!dragEmp || dragEmp===empId) return;
@@ -587,8 +594,76 @@ const filteredEmployees = selectedPost === 'all'
           {posts.find(p => String(p.id) === String(s.post_id || s.postId))?.name || ''}
         </div>
 
-        <button
-          onClick={e=>{ e.stopPropagation(); deleteSchedule(s.id).then(reload); }}
+        {/* BOTÓN ELIMINAR */}
+<button
+  onClick={e=>{ e.stopPropagation(); deleteSchedule(s.id).then(reload); }}
+  style={{
+    position:'absolute',
+    top:-4,
+    right:-4,
+    background:'#ef4444',
+    border:'none',
+    color:'#fff',
+    borderRadius:'50%',
+    width:14,
+    height:14,
+    fontSize:9,
+    cursor:'pointer',
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'center',
+    lineHeight:1
+  }}
+>
+  ✕
+</button>
+
+{/* BOTÓN NO PUEDE CUBRIR */}
+<button
+  onClick={e => {
+    e.stopPropagation();
+    openNoPuedeCubrir(s);
+  }}
+  style={{
+    position:'absolute',
+    bottom:-4,
+    right:-4,
+    background:'#fbbf24',
+    border:'none',
+    color:'#000',
+    borderRadius:'50%',
+    width:14,
+    height:14,
+    fontSize:9,
+    cursor:'pointer',
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'center',
+    lineHeight:1
+  }}
+>
+  !
+</button>
+  style={{
+    position:'absolute',
+    bottom:-4,
+    right:-4,
+    background:'#fbbf24',
+    border:'none',
+    color:'#000',
+    borderRadius:'50%',
+    width:14,
+    height:14,
+    fontSize:9,
+    cursor:'pointer',
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'center',
+    lineHeight:1
+  }}
+>
+  !
+</button>
           style={{
             position:'absolute',
             top:-4,
@@ -799,6 +874,72 @@ const filteredEmployees = selectedPost === 'all'
               </div>
             )}
           </div>
+         {noPuedeCubrir && (
+  <div style={{
+    position:'fixed',
+    inset:0,
+    background:'rgba(0,0,0,0.8)',
+    zIndex:300,
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'center'
+  }}>
+    <div style={{
+      background:'#1a1a1a',
+      padding:20,
+      borderRadius:12,
+      width:400
+    }}>
+      <h3 style={{ color:'#F5C518' }}>Reemplazo de turno</h3>
+
+      <p style={{ color:'#f87171' }}>
+        {formatShift12h(noPuedeCubrir.schedule.shift)} en {noPuedeCubrir.vacancy.post.name}
+      </p>
+
+      <div style={{ marginTop:10 }}>
+        <div style={{ color:'#F5C518', fontSize:12, fontWeight:700 }}>
+          Sugerencias:
+        </div>
+
+        {getAvailable(noPuedeCubrir.vacancy).recommended.slice(0,5).map(({ emp }) => (
+          <div key={emp.id} style={{ marginTop:6, color:'#34d399' }}>
+            • {emp.name}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:'flex', gap:10, marginTop:20 }}>
+        <button
+          onClick={async () => {
+            await deleteSchedule(noPuedeCubrir.schedule.id);
+            setNoPuedeCubrir(null);
+            await reload();
+          }}
+          style={{
+            flex:1,
+            background:'#f87171',
+            padding:10,
+            borderRadius:6
+          }}
+        >
+          Liberar turno
+        </button>
+
+        <button
+          onClick={() => setNoPuedeCubrir(null)}
+          style={{
+            flex:1,
+            background:'#444',
+            padding:10,
+            borderRadius:6
+          }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+)}
         </div>
       )}
     </div>
