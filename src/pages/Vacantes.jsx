@@ -454,16 +454,17 @@ if (recommended.length === 0 && available.length === 0 && limited.length === 0) 
                 opacity: 0.6
               }}>
                 <div style={{ fontWeight: 600 }}>{emp.name}</div>
-                <div style={{ fontSize: 11, color: '#f87171' }}>
-
-                  <div style={{ fontSize: 11, color: '#888' }}>
+                <div style={{ fontSize: 11, color: '#888' }}>
   Último: {lastShift}
 </div>
 
 <div style={{ fontSize: 11, color: '#888' }}>
   Próximo: {nextShift}
 </div>
-                  {reason}
+
+<div style={{ fontSize: 11, color: '#f87171' }}>
+  {reason}
+</div>
                 </div>
               </div>
             ))}
