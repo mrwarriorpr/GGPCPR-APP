@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { getEmployees, getPosts, getSchedules, saveSchedule, deleteSchedule } from '../data/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
+ 
 const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const DIAS_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
