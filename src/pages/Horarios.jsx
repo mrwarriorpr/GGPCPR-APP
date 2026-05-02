@@ -556,7 +556,7 @@ const filteredEmployees = selectedPost === 'all'
                   </div>
                 </td>
                 {days.map((d,i) => {
-                  const daySchedules = getEmpSchedule(emp.id, d);
+                 const daySchedules = getEmpSchedule(emp.id, d).filter(s => selectedPost === 'all' || String(s.post_id || s.postId) === String(selectedPost));
 
                   const isToday = fmt(d)===fmt(new Date());
                   return (
