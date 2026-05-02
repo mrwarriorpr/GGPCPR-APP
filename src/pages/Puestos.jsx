@@ -85,10 +85,7 @@ const open = (post=null) => {
     coverage: post.coverage || '24/7',
     days: post.days || [1,2,3,4,5,6,0],
     guardsPerShift: post.guardsPerShift || 1
-  } : {
-    ...BLANK,
-    id: Date.now().toString()
-  });
+ } : { ...BLANK });
 
   setModal(true);
 };
