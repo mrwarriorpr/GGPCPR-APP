@@ -136,11 +136,36 @@ export default function Vacantes() {
   });
 
 const getAvailable = (vacancy) => {
+  const recommended = [];
   const available = [];
   const limited = [];
 
+  const vacancyDate = new Date(vacancy.date.split('/').reverse().join('-') + 'T12:00:00');
+
+  const getShiftInfo = (emp) => {
+    const empAllSchedules = schedules
+      .filter(s => String(s.employee_id || s.employeeId) === String(emp.id))
+      .map(s => ({
+        ...s,
+        realDate: new Date(s.date.split('/').reverse().join('-') + 'T12:00:00')
+      }))
+      .sort((a, b) => a.realDate - b.realDate);
+
+    const last = [...empAllSchedules]
+      .filter(s => s.realDate < vacancyDate)
+      .pop();
+
+    const next = empAllSchedules
+      .find(s => s.realDate > vacancyDate);
+
+    return {
+      lastShift: last ? `${last.date} · ${formatShift12h(last.shift)} · ${last.post_name || ''}` : 'Sin turno previo',
+      nextShift: next ? `${next.date} · ${formatShift12h(next.shift)} · ${next.post_name || ''}` : 'Sin próximo turno'
+    };
+  };
+
   employees.forEach(emp => {
-    const empSchedules = schedules.filter(s =>
+    const empSchedulesToday = schedules.filter(s =>
       String(s.employee_id || s.employeeId) === String(emp.id) &&
       s.date === vacancy.date
     );
@@ -150,15 +175,17 @@ const getAvailable = (vacancy) => {
       a.date === vacancy.date
     );
 
+    const info = getShiftInfo(emp);
+
     if (hasCita) {
-      limited.push({ emp, reason: 'Tiene cita ese día' });
+      limited.push({ emp, reason: 'Tiene cita ese día', ...info });
       return;
     }
 
     let conflict = false;
     let reason = '';
 
-    for (let s of empSchedules) {
+    for (let s of empSchedulesToday) {
       if (overlap(normalizeShift(s.shift), normalizeShift(vacancy.shift))) {
         conflict = true;
         reason = `Trabaja ${formatShift12h(s.shift)} en ${s.post_name}`;
@@ -167,13 +194,25 @@ const getAvailable = (vacancy) => {
     }
 
     if (conflict) {
-      limited.push({ emp, reason });
+      limited.push({ emp, reason, ...info });
+      return;
+    }
+
+    const hasWorkedThisPost = schedules.some(s =>
+      String(s.employee_id || s.employeeId) === String(emp.id) &&
+      String(s.post_id || s.postId) === String(vacancy.post.id)
+    );
+
+    const empData = { emp, ...info };
+
+    if (hasWorkedThisPost) {
+      recommended.push(empData);
     } else {
-      available.push(emp);
+      available.push(empData);
     }
   });
 
-  return { available, limited };
+  return { recommended, available, limited };
 };
 
  const handleAssign = async (vacancy, emp) => {
@@ -273,10 +312,9 @@ const getAvailable = (vacancy) => {
                 </div>
                <div style={{ padding: '12px 0' }}>
   {(() => {
-    const { available, limited } = getAvailable(selectedVacancy);
+    const { recommended, available, limited } = getAvailable(selectedVacancy);
 
-    if (available.length === 0 && limited.length === 0) {
-      return (
+if (recommended.length === 0 && available.length === 0 && limited.length === 0) {      return (
         <div style={{ padding: '24px', textAlign: 'center', color: '#888' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>😔</div>
           No hay empleados disponibles para este turno.
@@ -286,9 +324,72 @@ const getAvailable = (vacancy) => {
 
     return (
       <>
+
+{/* ⭐ RECOMENDADOS */}
+{recommended.length > 0 && (
+  <div style={{ padding: '10px 20px', color: '#F5C518', fontSize: 12, fontWeight: 700 }}>
+    ⭐ Recomendados — ya han trabajado este puesto
+  </div>
+)}
+
+{recommended.map(({ emp, lastShift, nextShift }) => (
+  <div key={`${emp.id}_rec`} style={{
+    padding: '12px 20px',
+    borderBottom: '1px solid #222',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    background: 'rgba(245,197,24,0.06)'
+  }}>
+    <div style={{
+      width: 40, height: 40, borderRadius: 10,
+      background: '#2a2a2a',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 12, fontWeight: 700, color: '#F5C518'
+    }}>
+      {emp.name.split(' ').map(n => n[0]).join('').slice(0,2)}
+    </div>
+
+    <div style={{ flex: 1 }}>
+  <div style={{ fontWeight: 600 }}>{emp.name}</div>
+
+  <div style={{ fontSize: 11, color: '#888' }}>
+    Último: {lastShift}
+  </div>
+
+  <div style={{ fontSize: 11, color: '#888' }}>
+    Próximo: {nextShift}
+  </div>
+</div>
+
+    <button onClick={() => handleAssign(selectedVacancy, emp)}
+      style={{
+        padding: '7px 14px',
+        borderRadius: 7,
+        background: '#F5C518',
+        color: '#000',
+        fontWeight: 700,
+        cursor: 'pointer'
+      }}>
+      Asignar
+    </button>
+  </div>
+))}
+        
         {/* 🟢 DISPONIBLES */}
-        {available.map(emp => (
-          <div key={emp.id} style={{
+
+        {available.length > 0 && (
+  <div style={{
+    padding: '10px 20px',
+    color: '#34d399',
+    fontSize: 12,
+    fontWeight: 700
+  }}>
+    🟢 Disponibles
+  </div>
+)}
+    
+{available.map(({ emp, lastShift, nextShift }) => (          <div key={`${emp.id}_avail`} style={{
             padding: '12px 20px',
             borderBottom: '1px solid #222',
             display: 'flex',
@@ -304,12 +405,21 @@ const getAvailable = (vacancy) => {
               {emp.name.split(' ').map(n => n[0]).join('').slice(0,2)}
             </div>
 
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>{emp.name}</div>
-              <div style={{ fontSize: 11, color: '#888' }}>
-                {emp.type === 'full-time' ? 'Full-Time' : 'Part-Time'}
-              </div>
-            </div>
+      <div style={{ flex: 1 }}>
+  <div style={{ fontWeight: 600 }}>{emp.name}</div>
+
+  <div style={{ fontSize: 11, color: '#888' }}>
+    Último: {lastShift}
+  </div>
+
+  <div style={{ fontSize: 11, color: '#888' }}>
+    Próximo: {nextShift}
+  </div>
+
+  <div style={{ fontSize: 11, color: '#888' }}>
+    {emp.type === 'full-time' ? 'Full-Time' : 'Part-Time'}
+  </div>
+</div>
 
             <button onClick={() => handleAssign(selectedVacancy, emp)}
               style={{
@@ -337,14 +447,22 @@ const getAvailable = (vacancy) => {
               ⚠️ Con conflictos / limitaciones
             </div>
 
-            {limited.map(({ emp, reason }) => (
-              <div key={emp.id} style={{
+            {limited.map(({ emp, reason, lastShift, nextShift }) => (
+              <div key={`${emp.id}_limit`} style={{
                 padding: '12px 20px',
                 borderBottom: '1px solid #222',
                 opacity: 0.6
               }}>
                 <div style={{ fontWeight: 600 }}>{emp.name}</div>
                 <div style={{ fontSize: 11, color: '#f87171' }}>
+
+                  <div style={{ fontSize: 11, color: '#888' }}>
+  Último: {lastShift}
+</div>
+
+<div style={{ fontSize: 11, color: '#888' }}>
+  Próximo: {nextShift}
+</div>
                   {reason}
                 </div>
               </div>
